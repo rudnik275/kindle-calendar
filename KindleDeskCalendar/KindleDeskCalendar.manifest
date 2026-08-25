@@ -1,0 +1,8 @@
+{
+  "autodeskProduct": "Fusion360",
+  "type": "script",
+  "author": "OpenAI",
+  "description": "Generates an asymmetric rear-loading Kindle 4 desk-calendar enclosure with a front-light hood.",
+  "version": "0.1.0",
+  "supportedOS": "windows|mac"
+}

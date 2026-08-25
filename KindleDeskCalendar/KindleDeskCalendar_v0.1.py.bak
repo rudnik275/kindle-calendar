@@ -1,0 +1,320 @@
+"""Fusion 360 generator for an asymmetric Kindle 4 desk-calendar enclosure.
+
+Run from Utilities > Scripts and Add-Ins. The script creates a new design with
+separate components for the sculptural front shell, rear cover, light hood,
+opal diffuser, and a hidden Kindle fit-check body.
+
+Edit only the CONFIG values below and run again to regenerate the design.
+All values are millimetres.
+"""
+
+import adsk.core
+import adsk.fusion
+import math
+import traceback
+
+
+CONFIG = {
+    # Measure the actual device before committing to a long print.
+    'kindle_width': 166.0,
+    'kindle_height': 114.0,
+    'kindle_depth': 8.70,
+    'kindle_clearance_xy': 0.60,
+    'kindle_clearance_z': 0.50,
+
+    # Approximate Kindle 4 visible display. Measure yours with calipers.
+    'screen_width': 121.7,
+    'screen_height': 91.3,
+    'screen_corner_radius': 2.0,
+    'screen_center_x': 14.0,
+    'screen_center_y': 4.0,
+
+    # Main printable shell.
+    'body_depth': 15.0,
+    'front_skin': 3.2,
+    'rear_cover_thickness': 2.8,
+    'rear_cover_overlap': 4.0,
+
+    # Hidden top front-light hood.
+    'hood_projection': 14.0,
+    'hood_thickness': 6.0,
+    'diffuser_width': 132.0,
+    'diffuser_height': 3.2,
+    'diffuser_depth': 5.0,
+}
+
+
+def mm(value):
+    """Fusion geometry uses centimetres internally."""
+    return float(value) / 10.0
+
+
+def p2(x, y):
+    return adsk.core.Point3D.create(mm(x), mm(y), 0)
+
+
+def bezier(p0, p1, p2v, p3, count=18):
+    result = []
+    for i in range(count):
+        t = i / float(count)
+        u = 1.0 - t
+        x = u**3*p0[0] + 3*u*u*t*p1[0] + 3*u*t*t*p2v[0] + t**3*p3[0]
+        y = u**3*p0[1] + 3*u*u*t*p1[1] + 3*u*t*t*p2v[1] + t**3*p3[1]
+        result.append((x, y))
+    return result
+
+
+def outer_outline():
+    """Clockwise biomorphic silhouette with a low integrated foot."""
+    top = bezier((-110, 58), (-84, 91), (54, 92), (122, 58), 24)
+    right = bezier((122, 58), (132, 26), (130, -44), (105, -68), 18)
+    bottom = bezier((105, -68), (55, -77), (-12, -59), (-105, -75), 24)
+    left = bezier((-105, -75), (-132, -66), (-126, 34), (-110, 58), 20)
+    return top + right + bottom + left
+
+
+def hood_outline():
+    top = bezier((-111, 57), (-70, 88), (55, 91), (126, 58), 24)
+    bottom = bezier((126, 58), (62, 63), (-40, 62), (-101, 52), 24)
+    return top + bottom
+
+
+def rounded_rect(width, height, radius, cx=0.0, cy=0.0, segments=7):
+    radius = max(0.01, min(radius, width / 2.0, height / 2.0))
+    points = []
+    corners = [
+        (cx + width/2-radius, cy + height/2-radius, 0, math.pi/2),
+        (cx - width/2+radius, cy + height/2-radius, math.pi/2, math.pi),
+        (cx - width/2+radius, cy - height/2+radius, math.pi, 3*math.pi/2),
+        (cx + width/2-radius, cy - height/2+radius, 3*math.pi/2, 2*math.pi),
+    ]
+    for ox, oy, a0, a1 in corners:
+        for i in range(segments):
+            a = a0 + (a1-a0) * i / float(segments)
+            points.append((ox + radius*math.cos(a), oy + radius*math.sin(a)))
+    return points
+
+
+def ellipse(cx, cy, rx, ry, segments=42):
+    return [
+        (cx + rx*math.cos(2*math.pi*i/segments),
+         cy + ry*math.sin(2*math.pi*i/segments))
+        for i in range(segments)
+    ]
+
+
+def make_component(parent, name):
+    occ = parent.occurrences.addNewComponent(adsk.core.Matrix3D.create())
+    occ.component.name = name
+    return occ, occ.component
+
+
+def offset_plane(component, offset_mm):
+    plane_input = component.constructionPlanes.createInput()
+    plane_input.setByOffset(
+        component.xYConstructionPlane,
+        adsk.core.ValueInput.createByString(f'{offset_mm} mm')
+    )
+    return component.constructionPlanes.add(plane_input)
+
+
+def closed_spline_sketch(component, plane, points, name):
+    sketch = component.sketches.add(plane)
+    sketch.name = name
+    sketch.isComputeDeferred = True
+    fit_points = adsk.core.ObjectCollection.create()
+    for x, y in points:
+        fit_points.add(p2(x, y))
+    spline = sketch.sketchCurves.sketchFittedSplines.add(fit_points)
+    try:
+        spline.isClosed = True
+    except Exception:
+        sketch.sketchCurves.sketchLines.addByTwoPoints(
+            spline.endSketchPoint, spline.startSketchPoint
+        )
+    sketch.isComputeDeferred = False
+    return sketch
+
+
+def first_profile(sketch):
+    if sketch.profiles.count < 1:
+        raise RuntimeError(f'No closed profile found in sketch: {sketch.name}')
+    return sketch.profiles.item(0)
+
+
+def extrude_new(component, sketch, distance_expression, body_name):
+    feature_input = component.features.extrudeFeatures.createInput(
+        first_profile(sketch), adsk.fusion.FeatureOperations.NewBodyFeatureOperation
+    )
+    feature_input.setDistanceExtent(
+        False, adsk.core.ValueInput.createByString(distance_expression)
+    )
+    feature = component.features.extrudeFeatures.add(feature_input)
+    feature.name = body_name
+    feature.bodies.item(0).name = body_name
+    return feature.bodies.item(0)
+
+
+def extrude_cut(component, sketch, distance_expression, feature_name):
+    feature_input = component.features.extrudeFeatures.createInput(
+        first_profile(sketch), adsk.fusion.FeatureOperations.CutFeatureOperation
+    )
+    feature_input.setDistanceExtent(
+        False, adsk.core.ValueInput.createByString(distance_expression)
+    )
+    feature = component.features.extrudeFeatures.add(feature_input)
+    feature.name = feature_name
+    return feature
+
+
+def add_user_parameters(design):
+    params = design.userParameters
+    descriptions = {
+        'kindle_width': 'Measured Kindle width in landscape',
+        'kindle_height': 'Measured Kindle height in landscape',
+        'kindle_depth': 'Measured Kindle body thickness',
+        'screen_width': 'Measured visible e-ink width',
+        'screen_height': 'Measured visible e-ink height',
+        'body_depth': 'Depth of the sculptural shell',
+        'front_skin': 'Material between display face and Kindle pocket',
+        'rear_cover_thickness': 'Rear cover thickness',
+        'hood_projection': 'Front-light hood projection toward the viewer',
+    }
+    for key, description in descriptions.items():
+        params.add(
+            key,
+            adsk.core.ValueInput.createByString(f"{CONFIG[key]} mm"),
+            'mm',
+            description
+        )
+
+
+def build_front_shell(root):
+    _, comp = make_component(root, '01 Asymmetric Front Shell')
+    base_sketch = closed_spline_sketch(comp, comp.xYConstructionPlane, outer_outline(), 'Outer biomorphic silhouette')
+    extrude_new(comp, base_sketch, 'body_depth', 'Asymmetric shell')
+
+    screen = rounded_rect(
+        CONFIG['screen_width'], CONFIG['screen_height'],
+        CONFIG['screen_corner_radius'],
+        CONFIG['screen_center_x'], CONFIG['screen_center_y']
+    )
+    screen_sketch = closed_spline_sketch(comp, comp.xYConstructionPlane, screen, 'Visible e-ink aperture')
+    extrude_cut(comp, screen_sketch, 'body_depth', 'Cut visible screen aperture')
+
+    decor_sketch = closed_spline_sketch(
+        comp, comp.xYConstructionPlane,
+        ellipse(-96, -1, 16, 29), 'Asymmetric negative-space opening'
+    )
+    extrude_cut(comp, decor_sketch, 'body_depth', 'Cut sculptural opening')
+
+    pocket_plane = offset_plane(comp, CONFIG['front_skin'])
+    pocket = rounded_rect(
+        CONFIG['kindle_width'] + 2*CONFIG['kindle_clearance_xy'],
+        CONFIG['kindle_height'] + 2*CONFIG['kindle_clearance_xy'],
+        5.5,
+        CONFIG['screen_center_x'] + 2.5,
+        CONFIG['screen_center_y'] - 1.0
+    )
+    pocket_sketch = closed_spline_sketch(comp, pocket_plane, pocket, 'Rear-loading Kindle pocket')
+    pocket_depth = CONFIG['body_depth'] - CONFIG['front_skin']
+    extrude_cut(comp, pocket_sketch, f'{pocket_depth} mm', 'Cut Kindle pocket')
+
+    # Cable exit from pocket to the lower rear edge.
+    cable = rounded_rect(10.0, 31.0, 3.0, 70.0, -63.0)
+    cable_sketch = closed_spline_sketch(comp, pocket_plane, cable, 'USB cable exit')
+    extrude_cut(comp, cable_sketch, f'{pocket_depth} mm', 'Cut USB cable exit')
+    return comp
+
+
+def build_rear_cover(root):
+    _, comp = make_component(root, '02 Rear Cover')
+    z = CONFIG['body_depth'] + 0.25
+    plane = offset_plane(comp, z)
+    width = CONFIG['kindle_width'] + 2*CONFIG['rear_cover_overlap']
+    height = CONFIG['kindle_height'] + 2*CONFIG['rear_cover_overlap']
+    shape = rounded_rect(
+        width, height, 7.0,
+        CONFIG['screen_center_x'] + 2.5,
+        CONFIG['screen_center_y'] - 1.0
+    )
+    sketch = closed_spline_sketch(comp, plane, shape, 'Rear cover outline')
+    extrude_new(comp, sketch, 'rear_cover_thickness', 'Rear cover')
+
+    # A cable notch through the lower edge of the cover.
+    notch = rounded_rect(11.0, 18.0, 3.0, 70.0, -59.0)
+    notch_sketch = closed_spline_sketch(comp, plane, notch, 'Cable notch')
+    extrude_cut(comp, notch_sketch, 'rear_cover_thickness', 'Cut cover cable notch')
+    return comp
+
+
+def build_light_hood(root):
+    _, comp = make_component(root, '03 Front-Light Hood')
+    plane = offset_plane(comp, -CONFIG['hood_projection'])
+    sketch = closed_spline_sketch(comp, plane, hood_outline(), 'Cantilevered light hood')
+    extrude_new(comp, sketch, 'hood_projection', 'Asymmetric light hood')
+
+    # Visual channel indicator on the front-facing underside. The diffuser is a
+    # separate printable part; tune its final position after a lighting mock-up.
+    return comp
+
+
+def build_diffuser(root):
+    _, comp = make_component(root, '04 Opal Diffuser')
+    plane = offset_plane(comp, -CONFIG['hood_projection'] - 0.15)
+    shape = rounded_rect(
+        CONFIG['diffuser_width'], CONFIG['diffuser_height'], 1.6,
+        CONFIG['screen_center_x'],
+        CONFIG['screen_center_y'] + CONFIG['screen_height']/2 + 7.0
+    )
+    sketch = closed_spline_sketch(comp, plane, shape, 'Opal diffuser outline')
+    extrude_new(comp, sketch, f"{CONFIG['diffuser_depth']} mm", 'Opal diffuser')
+    return comp
+
+
+def build_kindle_fit_check(root):
+    occ, comp = make_component(root, '05 Kindle Fit Check (hidden)')
+    plane = offset_plane(comp, CONFIG['front_skin'] + 0.2)
+    shape = rounded_rect(
+        CONFIG['kindle_width'], CONFIG['kindle_height'], 5.0,
+        CONFIG['screen_center_x'] + 2.5,
+        CONFIG['screen_center_y'] - 1.0
+    )
+    sketch = closed_spline_sketch(comp, plane, shape, 'Kindle body envelope')
+    extrude_new(comp, sketch, 'kindle_depth', 'Kindle envelope')
+    occ.isLightBulbOn = False
+    return comp
+
+
+def run(context):
+    ui = None
+    try:
+        app = adsk.core.Application.get()
+        ui = app.userInterface
+        app.documents.add(adsk.core.DocumentTypes.FusionDesignDocumentType)
+        design = adsk.fusion.Design.cast(app.activeProduct)
+        design.designType = adsk.fusion.DesignTypes.ParametricDesignType
+        root = design.rootComponent
+        root.name = 'Kindle 4 Asymmetric Desk Calendar'
+
+        add_user_parameters(design)
+        build_front_shell(root)
+        build_rear_cover(root)
+        build_light_hood(root)
+        build_diffuser(root)
+        build_kindle_fit_check(root)
+
+        design.snapshots.add()
+        ui.messageBox(
+            'Kindle desk-calendar model created.\n\n'
+            'Before printing, measure your Kindle and edit the CONFIG block, '
+            'then run the script again. The hidden Kindle fit-check component '
+            'can be enabled in the Browser.'
+        )
+    except Exception:
+        if ui:
+            ui.messageBox('Generation failed:\n{}'.format(traceback.format_exc()))
+
+
+def stop(context):
+    pass
