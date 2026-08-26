@@ -2,214 +2,139 @@
 <html lang="uk">
 <head>
 <meta charset="utf-8">
-<title>Kindle Dashboard — за референсом 2026-08-26</title>
+<title>Kindle Dashboard — dark fantasy (референс 2026-08-26)</title>
 <!--
-  Шаблон екрана 800x600 (landscape) за користувацьким референсом:
-  погода-картка (Київ) + таймлайн подій + тижнева смужка + футер з годинником.
+  Шаблон 800x600 за референсом «пергамент + вежа + портрет».
   Рендер: ./render.sh -> ./push-to-kindle.sh.
 
-  ДАНІ: події — local-data.js (window.DASH_DATA, генерується, у git не йде).
-  Погода — МОК до фази NAS (Open-Meteo). Дата/тиждень/годинник/зворотний
-  відлік — рахуються JS на момент рендера.
+  АРТ-ШАРИ (за наявності файлів підхоплюються автоматично, інакше — чиста
+  пергаментна текстура):
+    art/bg.png        — full-bleed 800x600 grayscale ink-wash фон БЕЗ тексту
+                        (вежа зліва, портрет справа, центр світлий під текст)
+  Гігантське число на вежі — це ПОТОЧНА ТЕМПЕРАТУРА (рендериться поверх арту,
+  не запікати в картинку!). Поки погода мок — 21.
 
-  Контракт local-data.js:
-    window.DASH_DATA = {
-      events: [{ start:"YYYY-MM-DD"|"YYYY-MM-DDTHH:MM", end?:"...THH:MM",
-                 allDay:bool, title:"...", sub:"..."|undefined }]
-    };
+  ДАНІ: події — local-data.js (window.DASH_DATA.events, як раніше).
+  Годинник/дата/тиждень — JS на момент рендера.
 -->
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap');
 
 * { margin:0; padding:0; box-sizing:border-box; }
-html,body { width:800px; height:600px; overflow:hidden; background:#ececec; color:#111; }
-body { font-family:'Onest',sans-serif; padding:16px 18px 12px; display:flex; flex-direction:column; gap:11px; }
+html,body { width:800px; height:600px; overflow:hidden; background:#e6e4df; color:#141210; }
+body { font-family:'PT Serif',serif; position:relative; }
 
-.card { border:1px solid #000; border-radius:14px; background:#ececec; }
-svg.ic { stroke:#111; fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; display:block; }
+/* ── фонові шари ── */
+.bg-art { position:absolute; inset:0; width:800px; height:600px; object-fit:cover; }
+.grain { position:absolute; inset:0; opacity:.5; mix-blend-mode:multiply; pointer-events:none; }
+.vign { position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(ellipse 105% 95% at 50% 46%, rgba(0,0,0,0) 62%, rgba(20,18,16,.18) 100%); }
 
-/* ── верхній ряд ── */
-.top { flex:1; display:flex; gap:11px; min-height:0; }
+/* ── гігантська температура на вежі ── */
+.temp { position:absolute; left:30px; top:180px; width:280px; text-align:center;
+  font-family:'Cormorant Garamond',serif; font-weight:600; font-size:190px; line-height:1;
+  color:#1c1a17; }
+.temp.on-art { color:#ddd8d0; }   /* коли зʼявиться темна вежа під числом */
 
-/* погода */
-.wx { width:368px; flex:none; padding:16px 18px 12px; display:flex; flex-direction:column; }
-.wx-head { display:flex; gap:10px; align-items:flex-start; }
-.wx-head .city { font-size:19px; font-weight:800; letter-spacing:.02em; }
-.wx-head .country { font-size:12px; color:#555; margin-top:1px; }
-.wx-main { display:flex; gap:6px; margin-top:10px; }
-.wx-left { flex:1; }
-.wx-icon-deg { display:flex; align-items:center; gap:10px; }
-.deg { font-size:54px; font-weight:800; letter-spacing:-.03em; line-height:1; }
-.deg sup { font-size:26px; font-weight:600; vertical-align:18px; }
-.wx-feels { font-size:12.5px; margin-top:8px; }
-.wx-cond { font-size:12.5px; color:#333; margin-top:2px; }
-.wx-specs { width:128px; flex:none; border-left:1px solid #000; padding-left:12px;
-  display:flex; flex-direction:column; justify-content:space-between; }
-.spec { display:flex; gap:8px; align-items:center; }
-.spec .v { font-size:12.5px; font-weight:600; line-height:1.15; }
-.spec .l { font-size:10px; color:#666; }
-.wx-rule { border-top:1px solid #000; margin:11px 0 8px; }
-.hours { display:flex; justify-content:space-between; }
-.hr { text-align:center; width:44px; }
-.hr .h { font-size:10.5px; font-weight:500; color:#333; }
-.hr svg { margin:5px auto 4px; }
-.hr .t { font-size:12px; font-weight:600; }
+/* ── годинник ── */
+.clockblk { position:absolute; left:390px; top:34px; width:330px; text-align:center; }
+.clock { font-family:'Cormorant Garamond',serif; font-weight:500; font-size:88px; line-height:.95;
+  letter-spacing:.02em; }
+.dateline { font-family:'PT Serif',serif; font-size:19px; margin-top:6px; }
+.ornrule { display:flex; align-items:center; gap:8px; margin-top:12px; }
+.ornrule::before, .ornrule::after { content:''; flex:1; border-top:1px solid #2a2724; }
 
-/* події */
-.evc { flex:1; padding:16px 18px 12px; display:flex; flex-direction:column; min-width:0; }
-.ev-head { display:flex; align-items:center; gap:9px; }
-.ev-head .ttl { font-size:16px; font-weight:800; letter-spacing:.06em; }
-.ev-head .date { margin-left:auto; font-size:12.5px; font-weight:500; color:#111; display:flex; align-items:center; gap:7px; }
-.tl { margin-top:12px; flex:1; position:relative; }
-.tl::before { content:''; position:absolute; left:5px; top:8px; bottom:8px; border-left:1px solid #999; }
-.tle { position:relative; padding:0 0 14px 24px; }
-.tle:last-child { padding-bottom:0; }
-.tle .dot { position:absolute; left:0; top:3px; width:11px; height:11px; border-radius:50%;
-  background:#000; border:1px solid #000; }
-.tle .dot.mid { background:#888; border-color:#888; }
-.tle .dot.hollow { background:#ececec; border-color:#666; }
-.tle .when { font-size:12.5px; font-weight:600; color:#333; }
-.tle .name { font-size:16.5px; font-weight:700; margin-top:1px; }
-.tle .sub { font-size:12px; color:#666; margin-top:1px; }
-.tle .in { position:absolute; right:0; top:16px; font-size:11.5px; color:#333; }
-.tle.muted .name { font-weight:500; color:#777; font-size:14px; }
+/* ── події ── */
+.events { position:absolute; left:340px; top:200px; width:420px; }
+.evr { display:flex; align-items:center; padding:10px 0; }
+.evr + .evr { border-top:1px solid #55504a; }
+.evr .when { width:118px; flex:none; }
+.evr .wd { font-size:13px; letter-spacing:.22em; }
+.evr .big { font-family:'Cormorant Garamond',serif; font-weight:600; font-size:40px; line-height:1;
+  margin-top:-2px; font-variant-numeric:tabular-nums; }
+.evr .big .sm { font-size:19px; letter-spacing:.03em; }
+.evr .orn { flex:none; padding:0 14px 0 2px; }
+.evr .what .name { font-size:17.5px; font-weight:700; }
+.evr .what .sub { font-size:12.5px; color:#3c3833; margin-top:1px; }
+.evr.muted .what .name { font-weight:400; font-style:italic; color:#4a453f; font-size:15px; }
 
 /* ── тижнева смужка ── */
-.week { flex:none; height:118px; display:flex; align-items:stretch; padding:10px 6px; }
-.day { flex:1; text-align:center; display:flex; flex-direction:column; justify-content:center;
-  gap:2px; position:relative; }
-.day + .day::before { content:''; position:absolute; left:0; top:14px; bottom:14px; border-left:1px solid #aaa; }
-.day .a { font-size:10px; font-weight:600; letter-spacing:.14em; color:#555; text-transform:uppercase; }
-.day .n { font-size:30px; font-weight:700; letter-spacing:-.01em; line-height:1.1; }
-.day .m { font-size:11px; color:#555; }
-.day .dots { display:flex; gap:3px; justify-content:center; margin-top:4px; }
-.day .dots i { width:3.5px; height:3.5px; border-radius:50%; background:#999; }
-.day.today { border:1.5px solid #000; border-radius:12px; }
-.day.today + .day::before { display:none; }
-.day.today .n { font-weight:800; }
-.day.today .dots i:nth-child(-n+3) { background:#000; }
-
-/* ── футер ── */
-.ftr { flex:none; display:flex; align-items:center; padding:2px 6px 0; }
-.ftr .cell { display:flex; align-items:center; gap:8px; font-size:12px; color:#444; }
-.ftr .cell.l { flex:1; }
-.ftr .cell.r { flex:1; justify-content:flex-end; }
-.ftr .clock { font-family:'JetBrains Mono',monospace; font-size:21px; font-weight:700; color:#111;
-  padding:0 22px; border-left:1px solid #999; border-right:1px solid #999; }
+.week { position:absolute; left:0; right:0; bottom:26px; display:flex; padding:0 34px; }
+.day { flex:1; text-align:center; position:relative; }
+.day .a { font-size:13px; letter-spacing:.24em; }
+.day .n { font-family:'Cormorant Garamond',serif; font-weight:600; font-size:44px; line-height:1.05; }
+.day.today .inkbox { position:absolute; left:50%; top:-13px; transform:translateX(-50%);
+  width:74px; height:86px; background:#181512; filter:url(#rough); z-index:0; }
+.day.today .a, .day.today .n { position:relative; z-index:1; color:#e6e4df; }
+.day.today .orn { position:absolute; left:50%; transform:translateX(-50%); bottom:-14px; z-index:1; }
 </style>
 </head>
 <body>
 
-<div class="top">
-  <!-- MOCK: погода — Open-Meteo у фазі NAS -->
-  <div class="card wx">
-    <div class="wx-head">
-      <svg class="ic" width="22" height="22" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.5-6.5-10a6.5 6.5 0 1 1 13 0c0 4.5-6.5 10-6.5 10Z"/><circle cx="12" cy="10.5" r="2.3"/></svg>
-      <div><div class="city">КИЇВ</div><div class="country">Україна</div></div>
-    </div>
-    <div class="wx-main">
-      <div class="wx-left">
-        <div class="wx-icon-deg">
-          <svg class="ic" width="62" height="62" viewBox="0 0 24 24"><circle cx="10" cy="9" r="3.6"/><path d="M10 2.6v1.8M3.6 9h1.8M5.5 4.5l1.3 1.3M14.5 4.5l-1.3 1.3"/><path d="M11.5 20a4.2 4.2 0 1 1 .7-8.3 5.1 5.1 0 0 1 9.8 1.4 3.4 3.4 0 0 1-1.5 6.9Z"/></svg>
-          <span class="deg">21<sup>°</sup></span>
-        </div>
-        <div class="wx-feels">Відчувається як 19°</div>
-        <div class="wx-cond">Ясно, без опадів</div>
-      </div>
-      <div class="wx-specs">
-        <div class="spec"><svg class="ic" width="17" height="17" viewBox="0 0 24 24"><path d="M3 8h9a2.5 2.5 0 1 0-2.4-3.2M3 12h13a2.5 2.5 0 1 1-2.4 3.2M3 16h7"/></svg><span><span class="v">4 м/с</span><div class="l">ПнЗх</div></span></div>
-        <div class="spec"><svg class="ic" width="17" height="17" viewBox="0 0 24 24"><path d="M12 3s-6 6.5-6 11a6 6 0 0 0 12 0c0-4.5-6-11-6-11Z"/></svg><span><span class="v">58%</span><div class="l">Вологість</div></span></div>
-        <div class="spec"><svg class="ic" width="17" height="17" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg><span><span class="v">748 мм</span><div class="l">Тиск</div></span></div>
-        <div class="spec"><svg class="ic" width="17" height="17" viewBox="0 0 24 24"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.6"/></svg><span><span class="v">10 км</span><div class="l">Видимість</div></span></div>
-      </div>
-    </div>
-    <div class="wx-rule"></div>
-    <div class="hours" id="hours"></div>
-  </div>
+<img class="bg-art" src="art/bg.png" onerror="this.remove()">
+<svg class="grain" width="800" height="600">
+  <filter id="paper"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 .45  0 0 0 0 .44  0 0 0 0 .42  0 0 0 .35 0"/></filter>
+  <filter id="wash"><feTurbulence type="fractalNoise" baseFrequency=".012 .017" numOctaves="3" seed="11"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 .3  0 0 0 0 .29  0 0 0 0 .27  0 0 0 .22 0"/></filter>
+  <rect width="800" height="600" filter="url(#wash)"/>
+  <rect width="800" height="600" filter="url(#paper)"/>
+</svg>
+<div class="vign"></div>
+<svg width="0" height="0"><filter id="rough">
+  <feTurbulence type="fractalNoise" baseFrequency=".055" numOctaves="3" seed="4"/>
+  <feDisplacementMap in="SourceGraphic" scale="9"/></filter></svg>
 
-  <div class="card evc">
-    <div class="ev-head">
-      <svg class="ic" width="21" height="21" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 2.8V7M16 2.8V7"/></svg>
-      <span class="ttl">ПОДІЇ</span>
-      <span class="date"><span id="ev-date">…</span>
-        <svg class="ic" width="16" height="16" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 2.8V7M16 2.8V7"/></svg></span>
-    </div>
-    <div class="tl" id="tl"></div>
-  </div>
+<div class="temp" id="temp">21</div>
+
+<div class="clockblk">
+  <div class="clock" id="clock">--:--</div>
+  <div class="dateline" id="dateline">…</div>
+  <div class="ornrule"><svg width="11" height="11" viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="#2a2724" stroke-width="1.2" transform="rotate(45 6 6)"/></svg></div>
 </div>
 
-<div class="card week" id="week"></div>
+<div class="events" id="events"></div>
 
-<div class="ftr">
-  <span class="cell l">
-    <svg class="ic" width="15" height="15" viewBox="0 0 24 24" style="stroke:#444"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.2"/><path d="M12 1.8v3M12 19.2v3M1.8 12h3M19.2 12h3"/></svg>
-    Фокус. Дія. Результат.
-  </span>
-  <span class="clock" id="clock">--:--</span>
-  <span class="cell r">
-    <svg class="ic" width="15" height="15" viewBox="0 0 24 24" style="stroke:#444"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></svg>
-    Ясно мислити — просто.
-  </span>
-</div>
+<div class="week" id="week"></div>
 
 <script src="local-data.js"></script>
 <script>
 (function () {
-  const DAYS_FULL = ['неділя','понеділок','вівторок','середа','четвер','пʼятниця','субота'];
-  const DAYS_SHORT = ['нд','пн','вт','ср','чт','пт','сб'];
-  const ABBR = ['ПН','ВТ','СР','ЧТ','ПТ','СБ','НД'];
+  const DAYS_CAP = ['Неділя','Понеділок','Вівторок','Середа','Четвер','Пʼятниця','Субота'];
+  const ABBR = ['ПН','ВТ','СР','ЧТ','ПТ','СБ','НД'];   // від понеділка
+  const ABBR_SUN = ['НД','ПН','ВТ','СР','ЧТ','ПТ','СБ'];
   const MONTHS_GEN = ['січня','лютого','березня','квітня','травня','червня',
                       'липня','серпня','вересня','жовтня','листопада','грудня'];
+  const MONTHS_AB = ['СІЧ','ЛЮТ','БЕР','КВІ','ТРА','ЧЕР','ЛИП','СЕР','ВЕР','ЖОВ','ЛИС','ГРУ'];
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
   const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const DIA = '<svg width="13" height="13" viewBox="0 0 12 12"><rect x="3" y="3" width="6" height="6" fill="none" stroke="#2a2724" stroke-width="1.1" transform="rotate(45 6 6)"/></svg>';
 
-  document.getElementById('ev-date').textContent =
-    now.getDate() + ' ' + MONTHS_GEN[now.getMonth()] + ', ' + DAYS_FULL[now.getDay()];
   document.getElementById('clock').textContent = pad(now.getHours()) + ':' + pad(now.getMinutes());
+  document.getElementById('dateline').textContent =
+    DAYS_CAP[now.getDay()] + ', ' + now.getDate() + ' ' + MONTHS_GEN[now.getMonth()];
 
-  // погодинна смужка: «Зараз» + 6 наступних годин (іконки — мок до Open-Meteo)
-  const NIGHT = '<svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M20 14.5A8.3 8.3 0 0 1 9.5 4 8.3 8.3 0 1 0 20 14.5Z"/></svg>';
-  const CLOUD = '<svg class="ic" width="24" height="24" viewBox="0 0 24 24"><path d="M6.5 18a4.3 4.3 0 1 1 .8-8.5A5.2 5.2 0 0 1 17.4 11a3.5 3.5 0 0 1-.9 7Z"/></svg>';
-  let hrs = '';
-  for (let i = 0; i <= 6; i++) {
-    const h = (now.getHours() + i) % 24;
-    const night = h >= 21 || h < 6;
-    hrs += '<span class="hr"><span class="h">' + (i ? pad(h) + ':00' : 'Зараз') + '</span>' +
-      (night ? NIGHT : CLOUD) + '<span class="t">' + Math.max(14, 21 - i) + '°</span></span>';
-  }
-  document.getElementById('hours').innerHTML = hrs;
-
-  // таймлайн подій
-  const evs = (window.DASH_DATA && window.DASH_DATA.events) || [];
+  // події (макс 4 рядки, як у референсі)
+  const evs = ((window.DASH_DATA && window.DASH_DATA.events) || []).slice(0, 4);
   const todayStr = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
-  let tl = '';
-  const hasToday = evs.some(e => e.start.slice(0,10) === todayStr);
-  if (!hasToday) {
-    tl += '<div class="tle muted"><span class="dot hollow"></span>' +
-      '<div class="when">сьогодні</div><div class="name">подій немає</div></div>';
+  let html = '';
+  if (!evs.some(e => e.start.slice(0,10) === todayStr)) {
+    html += '<div class="evr muted"><span class="when"><span class="wd">' + ABBR_SUN[now.getDay()] + '</span>' +
+      '<div class="big">' + now.getDate() + '</div></span><span class="orn">' + DIA + '</span>' +
+      '<span class="what"><div class="name">сьогодні подій немає</div></span></div>';
   }
-  evs.forEach((e, i) => {
+  for (const e of evs) {
     const d = new Date(e.start.slice(0,10) + 'T00:00');
-    const isToday = e.start.slice(0,10) === todayStr;
-    const when = (isToday ? 'сьогодні' : DAYS_SHORT[d.getDay()] + ', ' + d.getDate() + ' ' + MONTHS_GEN[d.getMonth()]) +
-      ' · ' + (e.allDay ? 'весь день' : e.start.slice(11,16) + (e.end ? ' – ' + e.end.slice(11,16) : ''));
-    let cnt;
-    if (e.allDay) {
-      const days = Math.round((d - new Date(todayStr + 'T00:00')) / 864e5);
-      cnt = days <= 0 ? 'сьогодні' : 'за ' + days + ' ' + (days === 1 ? 'день' : days < 5 ? 'дні' : 'днів');
-    } else {
-      const mins = Math.max(0, Math.round((new Date(e.start) - now) / 6e4));
-      cnt = 'за ' + (mins >= 60 ? Math.floor(mins/60) + ' год ' + (mins%60 ? mins%60 + ' хв' : '') : mins + ' хв');
-    }
-    const dot = i === 0 ? '' : i === 1 ? ' mid' : ' hollow';
-    tl += '<div class="tle"><span class="dot' + dot + '"></span>' +
-      '<div class="when">' + when + '</div>' +
-      '<div class="name">' + esc(e.title) + '</div>' +
-      (e.sub ? '<div class="sub">' + esc(e.sub) + '</div>' : '') +
-      '<span class="in">' + cnt + '</span></div>';
-  });
-  document.getElementById('tl').innerHTML = tl;
+    const big = e.allDay
+      ? d.getDate() + ' <span class="sm">' + MONTHS_AB[d.getMonth()] + '</span>'
+      : e.start.slice(11,16);
+    html += '<div class="evr"><span class="when"><span class="wd">' + ABBR_SUN[d.getDay()] + '</span>' +
+      '<div class="big">' + big + '</div></span><span class="orn">' + DIA + '</span>' +
+      '<span class="what"><div class="name">' + esc(e.title) + '</div>' +
+      (e.sub ? '<div class="sub">' + esc(e.sub) + '</div>' : '') + '</span></div>';
+  }
+  document.getElementById('events').innerHTML = html;
 
   // тижнева смужка пн–нд
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
@@ -217,9 +142,11 @@ svg.ic { stroke:#111; fill:none; stroke-width:1.6; stroke-linecap:round; stroke-
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
     const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth();
-    wk += '<div class="day' + (isToday ? ' today' : '') + '"><span class="a">' + ABBR[i] + '</span>' +
-      '<span class="n">' + d.getDate() + '</span><span class="m">' + MONTHS_GEN[d.getMonth()] + '</span>' +
-      '<span class="dots">' + '<i></i>'.repeat(7) + '</span></div>';
+    wk += '<div class="day' + (isToday ? ' today' : '') + '">' +
+      (isToday ? '<span class="inkbox"></span>' : '') +
+      '<span class="a">' + ABBR[i] + '</span><div class="n">' + d.getDate() + '</div>' +
+      (isToday ? '<span class="orn">' + DIA.replace('stroke="#2a2724"','stroke="#181512" fill="#181512"') + '</span>' : '') +
+      '</div>';
   }
   document.getElementById('week').innerHTML = wk;
 })();
