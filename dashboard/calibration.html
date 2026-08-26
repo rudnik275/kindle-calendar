@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Калібрувальна картка e-ink</title>
+<!-- Пронумеровані зразки для оцінки НА ПАНЕЛІ (не в браузері).
+     Рендер: TEMPLATE=./calibration.html ./render.sh out/calib.png -->
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;800&family=JetBrains+Mono:wght@400;600&display=swap');
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { width:800px; height:600px; overflow:hidden; background:#fff; color:#000; }
+body { font-family:'Onest',sans-serif; padding:16px 20px; display:flex; flex-direction:column; }
+h1 { font-size:15px; font-weight:800; margin-bottom:8px; }
+.grid { flex:1; display:flex; gap:18px; }
+.col { flex:1; display:flex; flex-direction:column; gap:10px; }
+h2 { font-size:11px; font-weight:600; color:#000; margin-bottom:2px; }
+.num { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:600; width:24px; flex:none; }
+.row { display:flex; align-items:center; gap:8px; }
+
+/* лінії */
+.lw { flex:1; }
+.l1  { border-top:1px solid #000; } .l2 { border-top:1px solid #555; }
+.l3  { border-top:1px solid #888; } .l4 { border-top:1px solid #aaa; }
+.l5  { border-top:1px solid #ccc; } .l6 { border-top:2px solid #000; }
+.l7  { border-top:2px solid #888; } .l8 { border-top:1.5px solid #333; }
+
+/* рамки */
+.boxes { display:flex; gap:8px; flex-wrap:wrap; }
+.bx { width:64px; height:40px; display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:600; }
+.b1 { border:1px solid #c2c2c2; border-radius:12px; }
+.b2 { border:1px solid #888;    border-radius:12px; }
+.b3 { border:1px solid #000;    border-radius:12px; }
+.b4 { border:1.5px solid #333;  border-radius:8px; }
+.b5 { border:2px solid #000;    border-radius:12px; }
+.b6 { border:1px solid #000;    border-radius:0; }
+
+/* заливки */
+.sw { display:flex; }
+.sw i { display:block; width:38px; height:26px; }
+.sw span { font-family:'JetBrains Mono',monospace; font-size:9px; display:block; text-align:center; width:38px; }
+
+/* спарклайни */
+svg.spark { width:110px; height:26px; }
+
+/* текст */
+.txt p { line-height:1.35; }
+.smooth-none { -webkit-font-smoothing:none; }
+</style>
+</head>
+<body>
+
+<h1>Калібрування e-ink · оціни НА ПАНЕЛІ і назви номери</h1>
+
+<div class="grid">
+  <div class="col">
+    <h2>Лінії (тонкість/сірість)</h2>
+    <div class="row"><span class="num">1</span><span class="lw l1"></span></div>
+    <div class="row"><span class="num">2</span><span class="lw l2"></span></div>
+    <div class="row"><span class="num">3</span><span class="lw l3"></span></div>
+    <div class="row"><span class="num">4</span><span class="lw l4"></span></div>
+    <div class="row"><span class="num">5</span><span class="lw l5"></span></div>
+    <div class="row"><span class="num">6</span><span class="lw l6"></span></div>
+    <div class="row"><span class="num">7</span><span class="lw l7"></span></div>
+    <div class="row"><span class="num">8</span><span class="lw l8"></span></div>
+
+    <h2 style="margin-top:6px">Рамки-картки</h2>
+    <div class="boxes">
+      <div class="bx b1">11</div><div class="bx b2">12</div><div class="bx b3">13</div>
+      <div class="bx b4">14</div><div class="bx b5">15</div><div class="bx b6">16</div>
+    </div>
+
+    <h2 style="margin-top:6px">Заливки сірим</h2>
+    <div class="sw">
+      <span><i style="background:#000"></i>21</span>
+      <span><i style="background:#333"></i>22</span>
+      <span><i style="background:#555"></i>23</span>
+      <span><i style="background:#777"></i>24</span>
+      <span><i style="background:#999"></i>25</span>
+      <span><i style="background:#bbb"></i>26</span>
+      <span><i style="background:#ddd"></i>27</span>
+      <span><i style="background:#eee"></i>28</span>
+    </div>
+  </div>
+
+  <div class="col">
+    <h2>Спарклайни (обводка)</h2>
+    <div class="row"><span class="num">31</span>
+      <svg class="spark" viewBox="0 0 110 26"><polyline points="2,18 20,14 38,16 56,10 74,12 92,6 108,3" fill="none" stroke="#999" stroke-width="2" stroke-linecap="round"/></svg></div>
+    <div class="row"><span class="num">32</span>
+      <svg class="spark" viewBox="0 0 110 26"><polyline points="2,18 20,14 38,16 56,10 74,12 92,6 108,3" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round"/></svg></div>
+    <div class="row"><span class="num">33</span>
+      <svg class="spark" viewBox="0 0 110 26"><polyline points="2,18 20,14 38,16 56,10 74,12 92,6 108,3" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"/></svg></div>
+    <div class="row"><span class="num">34</span>
+      <svg class="spark" viewBox="0 0 110 26"><polyline points="2,18 20,14 38,16 56,10 74,12 92,6 108,3" fill="none" stroke="#000" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+    <div class="row"><span class="num">35</span>
+      <svg class="spark" viewBox="0 0 110 26" shape-rendering="crispEdges"><polyline points="2,18 20,14 38,16 56,10 74,12 92,6 108,3" fill="none" stroke="#000" stroke-width="2"/></svg></div>
+
+    <h2 style="margin-top:6px">Текст Onest (AA як є)</h2>
+    <div class="txt">
+      <p style="font-size:16.5px;font-weight:500">41 · Стендап команди 10:00</p>
+      <p style="font-size:13px;font-weight:600">42 · Найближчі дні, вівторок</p>
+      <p style="font-size:11.5px;color:#555">43 · slotranker · кліки · 7 дн</p>
+    </div>
+
+    <h2 style="margin-top:6px">Текст без згладжування</h2>
+    <div class="txt smooth-none">
+      <p style="font-size:16.5px;font-weight:500">44 · Стендап команди 10:00</p>
+      <p style="font-size:13px;font-weight:600">45 · Найближчі дні, вівторок</p>
+      <p style="font-size:11.5px;color:#555">46 · slotranker · кліки · 7 дн</p>
+    </div>
+
+    <h2 style="margin-top:6px">Інверсія (today у сітці)</h2>
+    <div class="row">
+      <span class="num">51</span><span style="background:#000;color:#fff;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600">26</span>
+      <span class="num">52</span><span style="background:#000;color:#fff;border-radius:0;padding:2px 8px;font-size:11px;font-weight:600">26</span>
+      <span class="num">53</span><span style="border:1.5px solid #000;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:800">26</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

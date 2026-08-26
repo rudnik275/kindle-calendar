@@ -29,17 +29,18 @@ body { font-family:'Onest',sans-serif; padding:22px 24px; display:flex; flex-dir
 .col-l { flex:1; display:flex; flex-direction:column; gap:12px; min-width:0; }
 .col-r { width:252px; flex:none; display:flex; flex-direction:column; gap:12px; }
 
-.card { border:1px solid #c2c2c2; border-radius:12px; padding:13px 16px 14px; background:#fff; min-height:0; }
+/* Калібрування на панелі 2026-08-26: лінії лише чорні (сірі hairline'и
+   e-ink рве), кути прямі (AA-скруглення бруднить), заливки/спарклайни ок. */
+.card { border:1px solid #000; border-radius:0; padding:13px 16px 14px; background:#fff; min-height:0; }
 .card h2 { font-size:12.5px; font-weight:600; color:#555; margin-bottom:9px; }
 
 /* агенда сьогодні */
 .agenda { flex:1; display:flex; flex-direction:column; }
 .now { display:flex; align-items:center; margin:1px 0 8px; }
 .now .dot { width:7px; height:7px; border-radius:50%; background:#000; flex:none; }
-.now .line { flex:1; border-top:1.5px solid #000; }
+.now .line { flex:1; border-top:2px solid #000; }
 .now .t { font-family:'JetBrains Mono',monospace; font-size:10.5px; font-weight:600; padding-left:7px; }
-.ev { display:flex; align-items:baseline; padding:6.5px 0; }
-.ev + .ev { border-top:1px solid #e2e2e2; }
+.ev { display:flex; align-items:baseline; padding:7.5px 0; }
 .ev .t { font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:600; width:62px; flex:none; }
 .ev .n { font-size:16.5px; font-weight:500; }
 .ev .sub { font-size:12.5px; color:#777; margin-left:8px; }
@@ -47,7 +48,7 @@ body { font-family:'Onest',sans-serif; padding:22px 24px; display:flex; flex-dir
 /* найближчі дні */
 .next { flex:1; }
 .nd { display:flex; padding:5.5px 0; align-items:baseline; }
-.nd + .nd { border-top:1px solid #e2e2e2; }
+.nd + .nd { border-top:1px solid #000; }
 .nd .d { width:60px; flex:none; font-size:13px; font-weight:600; }
 .nd .d span { color:#888; font-weight:500; font-size:11.5px; }
 .nd .evs { font-size:13.5px; line-height:1.45; color:#111; }
@@ -58,8 +59,7 @@ body { font-family:'Onest',sans-serif; padding:22px 24px; display:flex; flex-dir
 .wx-now { display:flex; align-items:center; gap:12px; margin-bottom:7px; }
 .wx-now .deg { font-size:38px; font-weight:800; letter-spacing:-.02em; line-height:1; }
 .wx-now .cond { font-size:13px; color:#555; line-height:1.3; }
-.wxr { display:flex; align-items:center; padding:4px 0; }
-.wxr + .wxr { border-top:1px solid #e9e9e9; }
+.wxr { display:flex; align-items:center; padding:4.5px 0; }
 .wxr .d { width:52px; font-size:12px; font-weight:600; color:#444; }
 .wxr .i { width:26px; }
 .wxr svg { width:16px; height:16px; display:block; }
@@ -72,11 +72,11 @@ body { font-family:'Onest',sans-serif; padding:22px 24px; display:flex; flex-dir
 .cal td { padding:2px 0; font-weight:500; color:#333; }
 .cal td.o { color:#ccc; }
 .cal td.today { position:relative; color:#fff; font-weight:600; z-index:0; }
-.cal td.today::before { content:''; position:absolute; inset:-1px 3px; background:#000; border-radius:6px; z-index:-1; }
+.cal td.today::before { content:''; position:absolute; inset:-1px 3px; background:#000; border-radius:0; z-index:-1; }
 
 /* ── GSC stat tiles ── */
 .tiles { display:flex; gap:12px; height:86px; flex:none; }
-.tile { flex:1; border:1px solid #c2c2c2; border-radius:12px; padding:11px 14px 10px; display:flex; flex-direction:column; }
+.tile { flex:1; border:1px solid #000; border-radius:0; padding:11px 14px 10px; display:flex; flex-direction:column; }
 .tile .lbl { font-size:11.5px; font-weight:600; color:#555; }
 .tile .row { display:flex; align-items:flex-end; margin-top:auto; }
 .tile .val { font-size:25px; font-weight:800; letter-spacing:-.01em; line-height:1; }
