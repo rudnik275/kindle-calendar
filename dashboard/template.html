@@ -2,88 +2,92 @@
 <html lang="uk">
 <head>
 <meta charset="utf-8">
-<title>Kindle Dashboard — dark fantasy (точний референс)</title>
+<title>Kindle Dashboard — dark fantasy v2 (вежа + портрет)</title>
 <!--
-  Шаблон 800x600 «один в один» з користувацьким референсом: фон art/bg.png —
-  сам референс зі стертим текстом (art/clean-bg.py), текст накладається HTML
-  у ті самі позиції (масштаб 800/1448 від оригінальних координат).
+  Шаблон 800x600 під фон art/bg2.png (вежа ліворуч, портрет праворуч,
+  світла смуга пергаменту посередині). Ассети користувача:
+    art/bg2.png        — фон (1448x1086, 4:3);
+    art/today-plate.png — гранжева плашка активної дати (RGBA, свій ромб унизу);
+    art/ink-mask.png   — текстура зносу: альфа-маска (.worn) для великих цифр.
   Гігантське число на вежі = поточна температура (мок 21 до Open-Meteo).
   Події: local-data.js (window.DASH_DATA.events). Рендер: ./render.sh.
 -->
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap');
+/* шрифти локальні (art/fonts) — рендер не залежить від інтернету */
+@import url('art/fonts/fonts.css');
 
 * { margin:0; padding:0; box-sizing:border-box; }
-html,body { width:800px; height:600px; overflow:hidden; background:#dcd7cd; color:#171412; }
+html,body { width:800px; height:600px; overflow:hidden; background:#c9c2b6; color:#171412; }
 body { font-family:'PT Serif',serif; position:relative; }
 
 .bg { position:absolute; inset:0; width:800px; height:600px; }
-.grain { position:absolute; inset:0; opacity:.42; mix-blend-mode:multiply; pointer-events:none; }
+.grain { position:absolute; inset:0; opacity:.24; mix-blend-mode:multiply; pointer-events:none; }
 
-.ink { mix-blend-mode:multiply; }   /* темний текст вбирає текстуру пергаменту */
+.ink { mix-blend-mode:multiply; }   /* темний текст вбирає пергамент */
+.worn { -webkit-mask-image:url('art/ink-mask.png'); -webkit-mask-size:620px; }
 
-/* ── температура на вежі ── */
-.temp { position:absolute; left:88px; top:168px; width:182px; text-align:center;
-  font-family:'Cormorant Garamond',serif; font-weight:500; font-size:168px; line-height:1;
-  color:#d9d2c4; opacity:.94; }
-.temp::before { content:''; position:absolute; inset:-26px -40px; z-index:-1;
-  background:radial-gradient(ellipse 60% 55% at 50% 50%, rgba(14,11,9,.62), rgba(14,11,9,0) 72%);
+/* ── температура на вежі (оптичний центр вежі ≈ x183) ── */
+.temphalo { position:absolute; left:48px; top:124px; width:270px; height:264px;
+  background:radial-gradient(ellipse 52% 50% at 50% 50%, rgba(12,10,8,.66), rgba(12,10,8,0) 74%);
   mix-blend-mode:multiply; }
+.tempblk { position:absolute; left:73px; top:148px; width:220px; text-align:center;
+  color:#d9d2c4; }
+.temp { font-family:'Cormorant Garamond',serif; font-weight:500; font-size:162px;
+  line-height:1; opacity:.95; }
+.feels { font-family:'Cormorant Garamond',serif; font-weight:500; font-size:44px;
+  line-height:1; margin-top:6px; opacity:.82; }
 
 /* ── годинник ── */
-.clockblk { position:absolute; left:400px; top:36px; width:306px; text-align:center; }
-.clock { font-family:'Cormorant Garamond',serif; font-weight:500; font-size:94px; line-height:.95;
+.clockblk { position:absolute; left:298px; top:30px; width:296px; text-align:center; }
+.clock { font-family:'Cormorant Garamond',serif; font-weight:500; font-size:96px; line-height:.95;
   letter-spacing:.03em; }
-.dateline { font-size:19px; margin-top:4px; }
+.dateline { font-family:'Forum',serif; font-size:19px; letter-spacing:.14em; margin-top:6px; }
 .ornrule { display:flex; align-items:center; margin-top:10px; }
 .ornrule::before, .ornrule::after { content:''; flex:1; border-top:1px solid #33302b; }
 .ornrule svg { margin:0 6px; }
 
 /* ── події ── */
-.events { position:absolute; left:319px; top:172px; width:290px; }
-.evr { position:relative; min-height:71px; }
+.events { position:absolute; left:308px; top:178px; width:280px; }
+.evr { position:relative; min-height:72px; }
 .evr + .evr { border-top:1px solid #6b655c; }
-.evr .wd { position:absolute; left:0; top:9px; font-size:13px; letter-spacing:.22em; }
-.evr .big { position:absolute; left:0; top:22px; font-family:'Cormorant Garamond',serif;
+.evr .wd { position:absolute; left:0; top:9px; font-family:'Forum',serif; font-size:13.5px; letter-spacing:.22em; }
+.evr .big { position:absolute; left:0; top:23px; font-family:'Cormorant Garamond',serif;
   font-weight:600; font-size:42px; line-height:1; white-space:nowrap; }
 .evr .big .sm { font-size:20px; letter-spacing:.04em; }
-.evr .orn { position:absolute; left:102px; top:28px; }
-.evr .what { display:block; margin-left:126px; padding:14px 0 8px; }
+.evr .orn { position:absolute; left:100px; top:29px; }
+.evr .what { display:block; margin-left:124px; padding:14px 0 8px; }
 .evr .name { font-size:16px; font-weight:700; line-height:1.2; }
 .evr .sub { font-size:13px; color:#403b34; margin-top:2px; }
 .evr.muted .name { font-weight:400; font-style:italic; color:#4a453d; font-size:15.5px; }
 
 /* ── тиждень ── */
-.week { position:absolute; left:0; top:472px; width:800px; height:110px; }
-.day { position:absolute; width:110px; transform:translateX(-50%); text-align:center; }
-.day .a { font-size:12.5px; letter-spacing:.26em; }
+.week { position:absolute; left:0; top:482px; width:800px; height:112px; }
+.day { position:absolute; width:96px; transform:translateX(-50%); text-align:center; }
+.day .a { font-family:'Forum',serif; font-size:13px; letter-spacing:.24em; }
 .day .n { font-family:'Cormorant Garamond',serif; font-weight:600; font-size:47px; line-height:1.05; }
-.day.today .box { position:absolute; left:50%; top:-14px; transform:translateX(-50%);
-  width:118px; height:112px; background:#14110e; filter:url(#rough); }
+.day.today .plate { position:absolute; left:50%; top:-16px; transform:translateX(-50%);
+  width:106px; height:131px; }
 .day.today .a, .day.today .n { position:relative; color:#ddd6c8; mix-blend-mode:normal; }
-.day.today .a { top:4px; }
-.day.today .orn { position:relative; display:block; margin-top:2px; }
+.day.today .a { top:2px; }
 </style>
 </head>
 <body>
 
-<img class="bg" src="art/bg.png">
+<img class="bg" src="art/bg2.png">
 <svg class="grain" width="800" height="600">
   <filter id="paper"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="7"/>
     <feColorMatrix type="matrix" values="0 0 0 0 .5  0 0 0 0 .49  0 0 0 0 .46  0 0 0 .3 0"/></filter>
-  <filter id="wash"><feTurbulence type="fractalNoise" baseFrequency=".011 .016" numOctaves="3" seed="11"/>
-    <feColorMatrix type="matrix" values="0 0 0 0 .35 0 0 0 0 .34 0 0 0 0 .31 0 0 0 .22 0"/></filter>
-  <rect width="800" height="600" filter="url(#wash)"/>
   <rect width="800" height="600" filter="url(#paper)"/>
 </svg>
-<svg width="0" height="0"><filter id="rough">
-  <feTurbulence type="fractalNoise" baseFrequency=".05" numOctaves="3" seed="4"/>
-  <feDisplacementMap in="SourceGraphic" scale="11"/></filter></svg>
 
-<div class="temp" id="temp">21</div>
+<div class="temphalo" id="temphalo"></div>
+<div class="tempblk" id="tempblk">
+  <div class="temp worn" id="temp"></div>
+  <div class="feels worn" id="feels"></div>
+</div>
 
 <div class="clockblk ink">
-  <div class="clock" id="clock">--:--</div>
+  <div class="clock worn" id="clock">--:--</div>
   <div class="dateline" id="dateline">…</div>
   <div class="ornrule"><svg width="12" height="12" viewBox="0 0 12 12"><rect x="2.7" y="2.7" width="6.6" height="6.6" fill="none" stroke="#33302b" stroke-width="1.1" transform="rotate(45 6 6)"/></svg></div>
 </div>
@@ -93,6 +97,7 @@ body { font-family:'PT Serif',serif; position:relative; }
 <div class="week" id="week"></div>
 
 <script src="local-data.js"></script>
+<script src="local-weather.js"></script>
 <script>
 (function () {
   const DAYS_CAP = ['Неділя','Понеділок','Вівторок','Середа','Четвер','Пʼятниця','Субота'];
@@ -105,6 +110,19 @@ body { font-family:'PT Serif',serif; position:relative; }
   const pad = n => String(n).padStart(2,'0');
   const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
   const DIA = c => '<svg width="13" height="13" viewBox="0 0 12 12"><rect x="3" y="3" width="6" height="6" fill="none" stroke="' + c + '" stroke-width="1.1" transform="rotate(45 6 6)"/></svg>';
+
+  // температура на вежі — з local-weather.js (Open-Meteo, оновлює live-push.sh);
+  // під нею маленькою цифрою «відчувається як»; без даних вежа — чистий арт
+  const w = window.DASH_WEATHER;
+  if (w && typeof w.temp === 'number') {
+    document.getElementById('temp').textContent = Math.round(w.temp);
+    if (typeof w.feels === 'number' && Math.round(w.feels) !== Math.round(w.temp)) {
+      document.getElementById('feels').textContent = Math.round(w.feels);
+    }
+  } else {
+    document.getElementById('tempblk').style.display = 'none';
+    document.getElementById('temphalo').style.display = 'none';
+  }
 
   document.getElementById('clock').textContent = pad(now.getHours()) + ':' + pad(now.getMinutes());
   document.getElementById('dateline').textContent =
@@ -119,32 +137,32 @@ body { font-family:'PT Serif',serif; position:relative; }
     '<span class="big">' + big + '</span><span class="orn">' + DIA('#33302b') + '</span>' +
     '<span class="what"><div class="name">' + name + '</div>' +
     (sub ? '<div class="sub">' + sub + '</div>' : '') + '</span></div>';
+  // маска зносу — тільки на цифрах: 20px-абревіатури місяців вона розриває
   if (!evs.some(e => e.start.slice(0,10) === todayStr)) {
     html += row(ABBR_SUN[now.getDay()],
-      now.getDate() + ' <span class="sm">' + MONTHS_AB[now.getMonth()] + '</span>',
+      '<span class="worn">' + now.getDate() + '</span> <span class="sm">' + MONTHS_AB[now.getMonth()] + '</span>',
       'сьогодні подій немає', '', true);
   }
   for (const e of evs) {
     const d = new Date(e.start.slice(0,10) + 'T00:00');
     const big = e.allDay
-      ? d.getDate() + ' <span class="sm">' + MONTHS_AB[d.getMonth()] + '</span>'
-      : e.start.slice(11,16);
+      ? '<span class="worn">' + d.getDate() + '</span> <span class="sm">' + MONTHS_AB[d.getMonth()] + '</span>'
+      : '<span class="worn">' + e.start.slice(11,16) + '</span>';
     html += row(ABBR_SUN[d.getDay()], big, esc(e.title), e.sub ? esc(e.sub) : '');
   }
   document.getElementById('events').innerHTML = html;
 
-  // тиждень пн–нд, центри колонок з референсу
-  const CX = [75, 180, 293, 395, 500, 605, 713];
+  // тиждень пн–нд: стрічка ліворуч від портрета
+  const CX = [108, 195, 282, 369, 456, 543, 630];
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
   let wk = '';
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
     const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth();
     wk += '<div class="day' + (isToday ? ' today' : '') + '" style="left:' + CX[i] + 'px">' +
-      (isToday ? '<span class="box"></span>' : '') +
+      (isToday ? '<img class="plate" src="art/today-plate.png">' : '') +
       '<span class="a' + (isToday ? '' : ' ink') + '">' + ABBR[i] + '</span>' +
-      '<div class="n' + (isToday ? '' : ' ink') + '">' + d.getDate() + '</div>' +
-      (isToday ? '<span class="orn">' + DIA('#ddd6c8') + '</span>' : '') +
+      '<div class="n' + (isToday ? ' worn' : ' ink worn') + '">' + d.getDate() + '</div>' +
       '</div>';
   }
   document.getElementById('week').innerHTML = wk;

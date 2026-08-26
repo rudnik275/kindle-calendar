@@ -20,8 +20,10 @@ iframe { width:800px; height:600px; border:0; display:block; background:#fff;
 <body>
 <h1>Kindle-дашборд · актуальний template.html</h1>
 <div class="device"><iframe src="template.html" scrolling="no"></iframe></div>
-<div class="note">Фільтр імітує матовий екран. Дата, «оновлено», лінія часу і місяць — живі
-(рахуються на момент відкриття); події, погода, GSC — мок до фази даних на NAS.
-E-ink токени за калібруванням на панелі: чорні 1px рамки, прямі кути, без світло-сірих hairline'ів.</div>
+<div class="note">Фільтр імітує матовий екран. Годинник, дата, тиждень — живі (на момент
+відкриття); події — local-data.js, погода — local-weather.js (пише live-push.sh).
+⚠️ Chrome з file:// не малює текстуру зносу на цифрах (CSS-маска блокується) —
+відкривати в Safari або через <code>python3 -m http.server</code>; рендер на панель
+цим не страждає (render.sh передає --allow-file-access-from-files).</div>
 </body>
 </html>

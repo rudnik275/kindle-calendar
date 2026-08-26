@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Kindle Dashboard — нічний екран</title>
+<!--
+  Нічний екран 00:00–06:00 і водночас заміна стокового sleeping.png
+  («Kindle is sleeping»): чистий арт без даних + ромбовий орнамент.
+  Рендер: TEMPLATE=./night.html ./render.sh out/night.png
+-->
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { width:800px; height:600px; overflow:hidden; background:#c9c2b6; }
+body { position:relative; }
+.bg { position:absolute; inset:0; width:800px; height:600px; }
+.grain { position:absolute; inset:0; opacity:.24; mix-blend-mode:multiply; }
+.orn { position:absolute; left:50%; bottom:22px; transform:translateX(-50%);
+  mix-blend-mode:multiply; opacity:.85; }
+</style>
+</head>
+<body>
+<img class="bg" src="art/bg2.png">
+<svg class="grain" width="800" height="600">
+  <filter id="paper"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="7"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 .5  0 0 0 0 .49  0 0 0 0 .46  0 0 0 .3 0"/></filter>
+  <rect width="800" height="600" filter="url(#paper)"/>
+</svg>
+<svg class="orn" width="120" height="16" viewBox="0 0 120 16">
+  <line x1="0" y1="8" x2="46" y2="8" stroke="#33302b" stroke-width="1"/>
+  <rect x="54" y="2" width="12" height="12" fill="none" stroke="#33302b" stroke-width="1.2" transform="rotate(45 60 8)"/>
+  <line x1="74" y1="8" x2="120" y2="8" stroke="#33302b" stroke-width="1"/>
+</svg>
+</body>
+</html>
