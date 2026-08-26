@@ -2,98 +2,93 @@
 <html lang="uk">
 <head>
 <meta charset="utf-8">
-<title>Kindle Dashboard — dark fantasy (референс 2026-08-26)</title>
+<title>Kindle Dashboard — dark fantasy (точний референс)</title>
 <!--
-  Шаблон 800x600 за референсом «пергамент + вежа + портрет».
-  Рендер: ./render.sh -> ./push-to-kindle.sh.
-
-  АРТ-ШАРИ (за наявності файлів підхоплюються автоматично, інакше — чиста
-  пергаментна текстура):
-    art/bg.png        — full-bleed 800x600 grayscale ink-wash фон БЕЗ тексту
-                        (вежа зліва, портрет справа, центр світлий під текст)
-  Гігантське число на вежі — це ПОТОЧНА ТЕМПЕРАТУРА (рендериться поверх арту,
-  не запікати в картинку!). Поки погода мок — 21.
-
-  ДАНІ: події — local-data.js (window.DASH_DATA.events, як раніше).
-  Годинник/дата/тиждень — JS на момент рендера.
+  Шаблон 800x600 «один в один» з користувацьким референсом: фон art/bg.png —
+  сам референс зі стертим текстом (art/clean-bg.py), текст накладається HTML
+  у ті самі позиції (масштаб 800/1448 від оригінальних координат).
+  Гігантське число на вежі = поточна температура (мок 21 до Open-Meteo).
+  Події: local-data.js (window.DASH_DATA.events). Рендер: ./render.sh.
 -->
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap');
 
 * { margin:0; padding:0; box-sizing:border-box; }
-html,body { width:800px; height:600px; overflow:hidden; background:#e6e4df; color:#141210; }
+html,body { width:800px; height:600px; overflow:hidden; background:#dcd7cd; color:#171412; }
 body { font-family:'PT Serif',serif; position:relative; }
 
-/* ── фонові шари ── */
-.bg-art { position:absolute; inset:0; width:800px; height:600px; object-fit:cover; }
-.grain { position:absolute; inset:0; opacity:.5; mix-blend-mode:multiply; pointer-events:none; }
-.vign { position:absolute; inset:0; pointer-events:none;
-  background:radial-gradient(ellipse 105% 95% at 50% 46%, rgba(0,0,0,0) 62%, rgba(20,18,16,.18) 100%); }
+.bg { position:absolute; inset:0; width:800px; height:600px; }
+.grain { position:absolute; inset:0; opacity:.42; mix-blend-mode:multiply; pointer-events:none; }
 
-/* ── гігантська температура на вежі ── */
-.temp { position:absolute; left:30px; top:180px; width:280px; text-align:center;
-  font-family:'Cormorant Garamond',serif; font-weight:600; font-size:190px; line-height:1;
-  color:#1c1a17; }
-.temp.on-art { color:#ddd8d0; }   /* коли зʼявиться темна вежа під числом */
+.ink { mix-blend-mode:multiply; }   /* темний текст вбирає текстуру пергаменту */
+
+/* ── температура на вежі ── */
+.temp { position:absolute; left:88px; top:168px; width:182px; text-align:center;
+  font-family:'Cormorant Garamond',serif; font-weight:500; font-size:168px; line-height:1;
+  color:#d9d2c4; opacity:.94; }
+.temp::before { content:''; position:absolute; inset:-26px -40px; z-index:-1;
+  background:radial-gradient(ellipse 60% 55% at 50% 50%, rgba(14,11,9,.62), rgba(14,11,9,0) 72%);
+  mix-blend-mode:multiply; }
 
 /* ── годинник ── */
-.clockblk { position:absolute; left:390px; top:34px; width:330px; text-align:center; }
-.clock { font-family:'Cormorant Garamond',serif; font-weight:500; font-size:88px; line-height:.95;
-  letter-spacing:.02em; }
-.dateline { font-family:'PT Serif',serif; font-size:19px; margin-top:6px; }
-.ornrule { display:flex; align-items:center; gap:8px; margin-top:12px; }
-.ornrule::before, .ornrule::after { content:''; flex:1; border-top:1px solid #2a2724; }
+.clockblk { position:absolute; left:400px; top:36px; width:306px; text-align:center; }
+.clock { font-family:'Cormorant Garamond',serif; font-weight:500; font-size:94px; line-height:.95;
+  letter-spacing:.03em; }
+.dateline { font-size:19px; margin-top:4px; }
+.ornrule { display:flex; align-items:center; margin-top:10px; }
+.ornrule::before, .ornrule::after { content:''; flex:1; border-top:1px solid #33302b; }
+.ornrule svg { margin:0 6px; }
 
 /* ── події ── */
-.events { position:absolute; left:340px; top:200px; width:420px; }
-.evr { display:flex; align-items:center; padding:10px 0; }
-.evr + .evr { border-top:1px solid #55504a; }
-.evr .when { width:118px; flex:none; }
-.evr .wd { font-size:13px; letter-spacing:.22em; }
-.evr .big { font-family:'Cormorant Garamond',serif; font-weight:600; font-size:40px; line-height:1;
-  margin-top:-2px; font-variant-numeric:tabular-nums; }
-.evr .big .sm { font-size:19px; letter-spacing:.03em; }
-.evr .orn { flex:none; padding:0 14px 0 2px; }
-.evr .what .name { font-size:17.5px; font-weight:700; }
-.evr .what .sub { font-size:12.5px; color:#3c3833; margin-top:1px; }
-.evr.muted .what .name { font-weight:400; font-style:italic; color:#4a453f; font-size:15px; }
+.events { position:absolute; left:319px; top:172px; width:290px; }
+.evr { position:relative; min-height:71px; }
+.evr + .evr { border-top:1px solid #6b655c; }
+.evr .wd { position:absolute; left:0; top:9px; font-size:13px; letter-spacing:.22em; }
+.evr .big { position:absolute; left:0; top:22px; font-family:'Cormorant Garamond',serif;
+  font-weight:600; font-size:42px; line-height:1; white-space:nowrap; }
+.evr .big .sm { font-size:20px; letter-spacing:.04em; }
+.evr .orn { position:absolute; left:102px; top:28px; }
+.evr .what { display:block; margin-left:126px; padding:14px 0 8px; }
+.evr .name { font-size:16px; font-weight:700; line-height:1.2; }
+.evr .sub { font-size:13px; color:#403b34; margin-top:2px; }
+.evr.muted .name { font-weight:400; font-style:italic; color:#4a453d; font-size:15.5px; }
 
-/* ── тижнева смужка ── */
-.week { position:absolute; left:0; right:0; bottom:26px; display:flex; padding:0 34px; }
-.day { flex:1; text-align:center; position:relative; }
-.day .a { font-size:13px; letter-spacing:.24em; }
-.day .n { font-family:'Cormorant Garamond',serif; font-weight:600; font-size:44px; line-height:1.05; }
-.day.today .inkbox { position:absolute; left:50%; top:-13px; transform:translateX(-50%);
-  width:74px; height:86px; background:#181512; filter:url(#rough); z-index:0; }
-.day.today .a, .day.today .n { position:relative; z-index:1; color:#e6e4df; }
-.day.today .orn { position:absolute; left:50%; transform:translateX(-50%); bottom:-14px; z-index:1; }
+/* ── тиждень ── */
+.week { position:absolute; left:0; top:472px; width:800px; height:110px; }
+.day { position:absolute; width:110px; transform:translateX(-50%); text-align:center; }
+.day .a { font-size:12.5px; letter-spacing:.26em; }
+.day .n { font-family:'Cormorant Garamond',serif; font-weight:600; font-size:47px; line-height:1.05; }
+.day.today .box { position:absolute; left:50%; top:-14px; transform:translateX(-50%);
+  width:118px; height:112px; background:#14110e; filter:url(#rough); }
+.day.today .a, .day.today .n { position:relative; color:#ddd6c8; mix-blend-mode:normal; }
+.day.today .a { top:4px; }
+.day.today .orn { position:relative; display:block; margin-top:2px; }
 </style>
 </head>
 <body>
 
-<img class="bg-art" src="art/bg.png" onerror="this.remove()">
+<img class="bg" src="art/bg.png">
 <svg class="grain" width="800" height="600">
-  <filter id="paper"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7"/>
-    <feColorMatrix type="matrix" values="0 0 0 0 .45  0 0 0 0 .44  0 0 0 0 .42  0 0 0 .35 0"/></filter>
-  <filter id="wash"><feTurbulence type="fractalNoise" baseFrequency=".012 .017" numOctaves="3" seed="11"/>
-    <feColorMatrix type="matrix" values="0 0 0 0 .3  0 0 0 0 .29  0 0 0 0 .27  0 0 0 .22 0"/></filter>
+  <filter id="paper"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="7"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 .5  0 0 0 0 .49  0 0 0 0 .46  0 0 0 .3 0"/></filter>
+  <filter id="wash"><feTurbulence type="fractalNoise" baseFrequency=".011 .016" numOctaves="3" seed="11"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 .35 0 0 0 0 .34 0 0 0 0 .31 0 0 0 .22 0"/></filter>
   <rect width="800" height="600" filter="url(#wash)"/>
   <rect width="800" height="600" filter="url(#paper)"/>
 </svg>
-<div class="vign"></div>
 <svg width="0" height="0"><filter id="rough">
-  <feTurbulence type="fractalNoise" baseFrequency=".055" numOctaves="3" seed="4"/>
-  <feDisplacementMap in="SourceGraphic" scale="9"/></filter></svg>
+  <feTurbulence type="fractalNoise" baseFrequency=".05" numOctaves="3" seed="4"/>
+  <feDisplacementMap in="SourceGraphic" scale="11"/></filter></svg>
 
 <div class="temp" id="temp">21</div>
 
-<div class="clockblk">
+<div class="clockblk ink">
   <div class="clock" id="clock">--:--</div>
   <div class="dateline" id="dateline">…</div>
-  <div class="ornrule"><svg width="11" height="11" viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="#2a2724" stroke-width="1.2" transform="rotate(45 6 6)"/></svg></div>
+  <div class="ornrule"><svg width="12" height="12" viewBox="0 0 12 12"><rect x="2.7" y="2.7" width="6.6" height="6.6" fill="none" stroke="#33302b" stroke-width="1.1" transform="rotate(45 6 6)"/></svg></div>
 </div>
 
-<div class="events" id="events"></div>
+<div class="events ink" id="events"></div>
 
 <div class="week" id="week"></div>
 
@@ -101,7 +96,7 @@ body { font-family:'PT Serif',serif; position:relative; }
 <script>
 (function () {
   const DAYS_CAP = ['Неділя','Понеділок','Вівторок','Середа','Четвер','Пʼятниця','Субота'];
-  const ABBR = ['ПН','ВТ','СР','ЧТ','ПТ','СБ','НД'];   // від понеділка
+  const ABBR = ['ПН','ВТ','СР','ЧТ','ПТ','СБ','НД'];
   const ABBR_SUN = ['НД','ПН','ВТ','СР','ЧТ','ПТ','СБ'];
   const MONTHS_GEN = ['січня','лютого','березня','квітня','травня','червня',
                       'липня','серпня','вересня','жовтня','листопада','грудня'];
@@ -109,43 +104,47 @@ body { font-family:'PT Serif',serif; position:relative; }
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
   const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
-  const DIA = '<svg width="13" height="13" viewBox="0 0 12 12"><rect x="3" y="3" width="6" height="6" fill="none" stroke="#2a2724" stroke-width="1.1" transform="rotate(45 6 6)"/></svg>';
+  const DIA = c => '<svg width="13" height="13" viewBox="0 0 12 12"><rect x="3" y="3" width="6" height="6" fill="none" stroke="' + c + '" stroke-width="1.1" transform="rotate(45 6 6)"/></svg>';
 
   document.getElementById('clock').textContent = pad(now.getHours()) + ':' + pad(now.getMinutes());
   document.getElementById('dateline').textContent =
     DAYS_CAP[now.getDay()] + ', ' + now.getDate() + ' ' + MONTHS_GEN[now.getMonth()];
 
-  // події (макс 4 рядки, як у референсі)
+  // події — макс 4 рядки
   const evs = ((window.DASH_DATA && window.DASH_DATA.events) || []).slice(0, 4);
   const todayStr = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
   let html = '';
+  const row = (abbr, big, name, sub, muted) =>
+    '<div class="evr' + (muted ? ' muted' : '') + '"><span class="wd">' + abbr + '</span>' +
+    '<span class="big">' + big + '</span><span class="orn">' + DIA('#33302b') + '</span>' +
+    '<span class="what"><div class="name">' + name + '</div>' +
+    (sub ? '<div class="sub">' + sub + '</div>' : '') + '</span></div>';
   if (!evs.some(e => e.start.slice(0,10) === todayStr)) {
-    html += '<div class="evr muted"><span class="when"><span class="wd">' + ABBR_SUN[now.getDay()] + '</span>' +
-      '<div class="big">' + now.getDate() + '</div></span><span class="orn">' + DIA + '</span>' +
-      '<span class="what"><div class="name">сьогодні подій немає</div></span></div>';
+    html += row(ABBR_SUN[now.getDay()],
+      now.getDate() + ' <span class="sm">' + MONTHS_AB[now.getMonth()] + '</span>',
+      'сьогодні подій немає', '', true);
   }
   for (const e of evs) {
     const d = new Date(e.start.slice(0,10) + 'T00:00');
     const big = e.allDay
       ? d.getDate() + ' <span class="sm">' + MONTHS_AB[d.getMonth()] + '</span>'
       : e.start.slice(11,16);
-    html += '<div class="evr"><span class="when"><span class="wd">' + ABBR_SUN[d.getDay()] + '</span>' +
-      '<div class="big">' + big + '</div></span><span class="orn">' + DIA + '</span>' +
-      '<span class="what"><div class="name">' + esc(e.title) + '</div>' +
-      (e.sub ? '<div class="sub">' + esc(e.sub) + '</div>' : '') + '</span></div>';
+    html += row(ABBR_SUN[d.getDay()], big, esc(e.title), e.sub ? esc(e.sub) : '');
   }
   document.getElementById('events').innerHTML = html;
 
-  // тижнева смужка пн–нд
+  // тиждень пн–нд, центри колонок з референсу
+  const CX = [75, 180, 293, 395, 500, 605, 713];
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
   let wk = '';
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
     const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth();
-    wk += '<div class="day' + (isToday ? ' today' : '') + '">' +
-      (isToday ? '<span class="inkbox"></span>' : '') +
-      '<span class="a">' + ABBR[i] + '</span><div class="n">' + d.getDate() + '</div>' +
-      (isToday ? '<span class="orn">' + DIA.replace('stroke="#2a2724"','stroke="#181512" fill="#181512"') + '</span>' : '') +
+    wk += '<div class="day' + (isToday ? ' today' : '') + '" style="left:' + CX[i] + 'px">' +
+      (isToday ? '<span class="box"></span>' : '') +
+      '<span class="a' + (isToday ? '' : ' ink') + '">' + ABBR[i] + '</span>' +
+      '<div class="n' + (isToday ? '' : ' ink') + '">' + d.getDate() + '</div>' +
+      (isToday ? '<span class="orn">' + DIA('#ddd6c8') + '</span>' : '') +
       '</div>';
   }
   document.getElementById('week').innerHTML = wk;
