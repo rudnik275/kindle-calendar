@@ -1,6 +1,7 @@
 out/
 local-data.js
 local-weather.js
+local-rates.js
 nas/app/
 secret/
 __pycache__/
