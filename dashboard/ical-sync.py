@@ -15,6 +15,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -30,6 +31,25 @@ UA = "kindle-dash/1.0 (+https://github.com/rudnik275/kindle-calendar)"
 
 def log(msg):
     print(f"ical-sync: {msg}", file=sys.stderr)
+
+
+# Емодзі в назвах подій («🎂 День народження») локальні шрифти не мають, і
+# Chrome малює порожній квадрат-tofu просто перед текстом. Своїх гліфів у
+# Cormorant/PT Serif/Forum для них немає, а тягнути емодзі-шрифт заради
+# монохромного e-ink безглуздо — вони б однаково виглядали чужорідно.
+# Тому ріжемо: емодзі-площини, стрілки/дінгбати, селектори варіацій і ZWJ.
+_DROP = re.compile(
+    "[\U0001F000-\U0001FAFF"      # емодзі та пікторграми
+    "←-⯿"               # стрілки, геометрія, дінгбати
+    "☀-➿"
+    "︀-️"               # селектори варіацій (VS15/VS16)
+    "‍⃣]"               # ZWJ і keycap
+)
+
+
+def clean(text):
+    """Прибирає те, що шрифти дашборда не намалюють, і чистить пробіли."""
+    return re.sub(r"\s{2,}", " ", _DROP.sub("", text)).strip(" -–—·•\t")
 
 
 def read_urls(path):
@@ -65,10 +85,10 @@ def collect(raw, tz, since, until):
         start_dt, all_day = local_naive(start.dt, tz)
         end = ev.get("DTEND")
         end_dt = local_naive(end.dt, tz)[0] if end is not None else start_dt
-        title = str(ev.get("SUMMARY") or "").strip()
+        title = clean(str(ev.get("SUMMARY") or ""))
         if not title:
             continue
-        sub = str(ev.get("LOCATION") or "").strip().splitlines()[:1]
+        sub = clean(str(ev.get("LOCATION") or "")).splitlines()[:1]
         out.append({
             "start": start_dt.strftime("%Y-%m-%dT%H:%M"),
             "allDay": all_day,
