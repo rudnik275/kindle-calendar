@@ -9,7 +9,8 @@
 #     раз на годину копія у /mnt/us/.../local/screen.png (фолбек на ребут);
 #   - книга недоступна → лог і наступна спроба за хвилину, цикл не вмирає;
 #   - повний e-ink refresh кожні FULL_EVERY хвилин (ghosting), решта часткові;
-#   - 02:00–06:00 — нічний арт (night.png), панель відпочиває;
+#   - працює 24/7 — нічного режиму немає, годинник тікає завжди
+#     (night.html існує лише як джерело sleeping.png-фолбека на книзі);
 #   - раз на добу синк годинника книги з мака (RTC дрейфує роками);
 #   - погода Open-Meteo кожні 15 хв, атомарно у local-weather.js;
 #     без інтернету лишається останнє значення.
@@ -22,7 +23,6 @@ LIVE_PNG=/tmp/dash-live.png                    # на книзі, tmpfs
 NAND_PNG=/mnt/us/dashboard/local/screen.png    # фолбек-копія на книзі
 FULL_EVERY=30          # хвилин між повними refresh
 NAND_EVERY=60          # хвилин між копіями на NAND
-NIGHT_START=2 NIGHT_END=6   # [START, END) — години нічного арту (панель відпочиває)
 # Погода: Київ (постав свої координати й перезапусти install-live.sh)
 WEATHER_LAT=50.45 WEATHER_LON=30.52
 WEATHER_EVERY=900      # секунд
@@ -91,27 +91,12 @@ render() {  # $1=template  $2=out
 }
 
 log "=== live-push daemon started (pid $$) ==="
-NIGHT_SENT=""
 
 while true; do
   # вирівнювання на початок хвилини (10# — бо date дає 08/09 з нулем)
   s=$(date +%S); sleep $((60 - 10#$s)) 2>/dev/null || sleep 30
   trim_log
-  hour=$((10#$(date +%H)))
   min=$((10#$(date +%M)))
-
-  # ── ніч: один раз пушимо нічний арт повним refresh'ем і мовчимо ──
-  if [ "$hour" -ge "$NIGHT_START" ] && [ "$hour" -lt "$NIGHT_END" ]; then
-    if [ -z "$NIGHT_SENT" ]; then
-      if render night.html out/night.png && push_frame out/night.png full yes; then
-        NIGHT_SENT=1; log "night screen pushed"
-      else
-        log "night: render/push failed, retry next minute"
-      fi
-    fi
-    continue
-  fi
-  NIGHT_SENT=""
 
   fetch_weather
   sync_kindle_clock
