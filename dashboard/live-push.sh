@@ -1,8 +1,10 @@
 #!/bin/bash
-# Живий конвеєр «мак → Kindle»: щохвилини рендерить template.html і пушить
-# кадр на книгу. Запускається як launchd-демон (KeepAlive) через
-# install-live.sh із деплой-копії ~/kindle-dash-live — НЕ з git-дерева,
-# щоб перемикання гілок/мерджі не ламали рантайм.
+# Живий конвеєр «сервер → Kindle»: щохвилини рендерить template.html і пушить
+# кадр на книгу. Один і той самий скрипт крутиться:
+#   - на NAS у Docker-контейнері (штатний режим, restart: always) — nas/;
+#   - на маку як launchd-демон (резервний шлях) — install-live.sh.
+# Рантайм навмисно відвʼязаний від git-дерева, щоб гілки й мерджі не ламали
+# працюючий демон.
 #
 # Довговічність:
 #   - кадр пишеться у /tmp книги (tmpfs=RAM) — NAND не зношується;
@@ -11,22 +13,32 @@
 #   - повний e-ink refresh кожні FULL_EVERY хвилин (ghosting), решта часткові;
 #   - працює 24/7 — нічного режиму немає, годинник тікає завжди
 #     (night.html існує лише як джерело sleeping.png-фолбека на книзі);
-#   - раз на добу синк годинника книги з мака (RTC дрейфує роками);
+#   - раз на добу синк годинника книги з сервером (RTC дрейфує роками);
 #   - погода Open-Meteo кожні 15 хв, атомарно у local-weather.js;
-#     без інтернету лишається останнє значення.
+#     без інтернету лишається останнє значення;
+#   - події з приватних iCal кожні CAL_EVERY секунд (ical-sync.py), теж
+#     атомарно і теж із збереженням попереднього значення при збої;
+#   - серія збоїв рендера -> вихід із кодом 1: підняти нас заново має
+#     супервізор (docker restart: always / launchd KeepAlive). Це лікує
+#     клас «завис Chrome», який зсередини не розгребти.
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
 
-SSH="ssh -F $HOME/.ssh/kindle.conf -o ConnectTimeout=6 -o ServerAliveInterval=5 -o ServerAliveCountMax=2 kindle"
+SSH_CONF="${SSH_CONF:-$HOME/.ssh/kindle.conf}"
+SSH="ssh -F $SSH_CONF -o ConnectTimeout=6 -o ServerAliveInterval=5 -o ServerAliveCountMax=2 kindle"
 LIVE_PNG=/tmp/dash-live.png                    # на книзі, tmpfs
 NAND_PNG=/mnt/us/dashboard/local/screen.png    # фолбек-копія на книзі
 FULL_EVERY=30          # хвилин між повними refresh
 NAND_EVERY=60          # хвилин між копіями на NAND
-# Погода: Київ (постав свої координати й перезапусти install-live.sh)
-WEATHER_LAT=50.45 WEATHER_LON=30.52
+# Погода: Київ (постав свої координати й перезапусти інсталятор)
+WEATHER_LAT="${WEATHER_LAT:-50.45}" WEATHER_LON="${WEATHER_LON:-30.52}"
 WEATHER_EVERY=900      # секунд
+CAL_EVERY="${CAL_EVERY:-900}"        # секунд між синками календаря
+CAL_URLS="${CAL_URLS:-$DIR/secret/ical-urls}"  # приватні iCal-URL (0600, поза git)
 TIMESYNC_EVERY=86400   # секунд
+RENDER_FAILS_MAX=5     # поспіль -> вихід, хай супервізор перезапустить
+PUSH_FAILS_MAX=60      # поспіль (≈1 год) -> те саме: чистимо мережевий стан
 
 LOG="$DIR/live-push.log"
 STATE="$DIR/state"; mkdir -p "$STATE" out
@@ -37,8 +49,13 @@ trim_log() {
   [ "${n:-0}" -gt 4000 ] && { tail -n 1000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
 }
 
-# єдиний екземпляр (mkdir-лок зі перевіркою живості PID)
-LOCK="$STATE/lock"
+# Єдиний екземпляр (mkdir-лок із перевіркою живості PID).
+# Лок НАВМИСНО не в $STATE, а на тимчасовій ФС: у контейнері цей скрипт
+# завжди PID 1, і переживший SIGKILL лок із записом «pid 1» на бінд-маунті
+# означав би, що наступний екземпляр бачить «сам себе» як чужого живого
+# демона й одразу виходить — вічний рестарт-цикл без жодного кадру.
+# Лок має жити рівно стільки, скільки живе машина/контейнер.
+LOCK="${TMPDIR:-/tmp}/kindle-dash.lock"
 if mkdir "$LOCK" 2>/dev/null; then
   echo $$ > "$LOCK/pid"
 else
@@ -53,7 +70,6 @@ trap 'rm -rf "$LOCK"' EXIT
 fetch_weather() {
   local now last; now=$(date +%s); last=$(cat "$STATE/weather-ts" 2>/dev/null || echo 0)
   [ $((now - last)) -lt "$WEATHER_EVERY" ] && return 0
-  local json temp
   local json out
   json=$(curl -sf -m 10 "https://api.open-meteo.com/v1/forecast?latitude=$WEATHER_LAT&longitude=$WEATHER_LON&current=temperature_2m,apparent_temperature" 2>/dev/null) || { log "weather: fetch failed"; return 1; }
   out=$(printf '%s' "$json" | python3 -c '
@@ -64,6 +80,25 @@ print("window.DASH_WEATHER = { temp: %s, feels: %s };" % (c["temperature_2m"], c
   printf '%s\n' "$out" > "$DIR/local-weather.js.tmp" && mv "$DIR/local-weather.js.tmp" "$DIR/local-weather.js"
   echo "$now" > "$STATE/weather-ts"
   log "weather: $out"
+}
+
+sync_calendar() {
+  [ -s "$CAL_URLS" ] || return 0            # немає фідів — лишаємо снапшот як є
+  [ -x "$DIR/ical-sync.py" ] || return 0
+  local now last; now=$(date +%s); last=$(cat "$STATE/cal-ts" 2>/dev/null || echo 0)
+  [ $((now - last)) -lt "$CAL_EVERY" ] && return 0
+  local out rc
+  # stderr ical-sync.py — без URL усередині (див. шапку скрипта), тому в лог можна
+  out=$("$DIR/ical-sync.py" --urls "$CAL_URLS" --out "$DIR/local-data.js" 2>&1); rc=$?
+  log "calendar: $(printf '%s' "$out" | tr '\n' '; ')"
+  if [ $rc -eq 0 ]; then
+    echo "$now" > "$STATE/cal-ts"
+  else
+    # не відповів — повторити за 2 хв, а не через повний CAL_EVERY і не
+    # щохвилини (щоб битий URL не молотив Google по колу)
+    echo $((now - CAL_EVERY + 120)) > "$STATE/cal-ts"
+  fi
+  return 0
 }
 
 sync_kindle_clock() {
@@ -87,30 +122,54 @@ push_frame() {  # $1=файл  $2=full|part  $3=також скопіювати 
 }
 
 render() {  # $1=template  $2=out
-  TEMPLATE="$DIR/$1" "$DIR/render.sh" "$2" >/dev/null 2>&1
+  QUIET=1 TEMPLATE="$DIR/$1" "$DIR/render.sh" "$2" >/dev/null 2>&1
 }
 
 log "=== live-push daemon started (pid $$) ==="
+render_fails=0 push_fails=0 first=yes
 
 while true; do
-  # вирівнювання на початок хвилини (10# — бо date дає 08/09 з нулем)
-  s=$(date +%S); sleep $((60 - 10#$s)) 2>/dev/null || sleep 30
   trim_log
   min=$((10#$(date +%M)))
 
   fetch_weather
+  sync_calendar
   sync_kindle_clock
 
-  if ! render template.html out/dash.png; then
-    log "render FAILED"; continue
+  if render template.html out/dash.png; then
+    render_fails=0
+  else
+    render_fails=$((render_fails + 1))
+    log "render FAILED ($render_fails/$RENDER_FAILS_MAX)"
+    if [ "$render_fails" -ge "$RENDER_FAILS_MAX" ]; then
+      log "рендер мертвий $render_fails разів поспіль — виходимо, хай супервізор підніме"
+      exit 1
+    fi
+    sleep 30; continue
   fi
 
+  # Перший кадр після старту — повний refresh: чистить ghosting, залишений
+  # тим, хто малював до нас (фолбек книги / попередній екземпляр демона).
+  # NAND тут свідомо НЕ чіпаємо: якщо ми колись потрапимо в рестарт-цикл,
+  # копія на кожному старті вигризала б флеш книги. Годинна копія й так буде.
   mode=part; nand=no
+  [ "$first" = yes ] && { mode=full; first=no; }
   [ $((min % FULL_EVERY)) -eq 0 ] && mode=full
   [ $((min % NAND_EVERY)) -eq 0 ] && nand=yes
+
   if push_frame out/dash.png "$mode" "$nand"; then
+    push_fails=0
     [ "$mode" = full ] && log "pushed (full, nand=$nand)"
   else
-    log "push FAILED (kindle unreachable?)"
+    push_fails=$((push_fails + 1))
+    log "push FAILED ($push_fails, kindle unreachable?)"
+    if [ "$push_fails" -ge "$PUSH_FAILS_MAX" ]; then
+      log "книга недосяжна $push_fails хвилин — виходимо, хай супервізор підніме"
+      exit 1
+    fi
   fi
+
+  date +%s > "$STATE/heartbeat"     # для docker healthcheck
+  # вирівнювання на початок хвилини (10# — бо date дає 08/09 з нулем)
+  s=$(date +%S); sleep $((60 - 10#$s)) 2>/dev/null || sleep 30
 done

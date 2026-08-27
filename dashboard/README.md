@@ -14,8 +14,13 @@
 
 ## Архітектура: живе оновлення (з 2026-08-27)
 
-**Мак — рендерер і пушер** (`live-push.sh`, launchd-демон
-`com.rudnik.kindle-dash`, ставиться `./install-live.sh`):
+**NAS — рендерер і пушер** (`live-push.sh` у Docker-контейнері `kindle-dash`,
+ставиться `nas/install-nas.sh`, деталі — `nas/README.md`). Мак робить те саме
+й тим самим скриптом, але тільки як резервний шлях (`install-live.sh`,
+launchd-демон `com.rudnik.kindle-dash`) — **разом їх вмикати не можна**,
+битимуться за екран.
+
+Цикл конвеєра (однаковий на обох):
 
 - щохвилини (вирівняно на початок хвилини): рендер → push у
   `/tmp/dash-live.png` книги (tmpfs = RAM, NAND не зношується) →
@@ -25,21 +30,29 @@
   єдине, що переживає ребут книги;
 - кожні 15 хв — погода Open-Meteo → `local-weather.js` (атомарно; без
   інтернету лишається останнє значення);
-- раз на добу — синк годинника книги з мака (`date -u -s` + `hwclock -w`,
+- кожні 15 хв — події з приватних iCal-фідів Google Calendar
+  (`ical-sync.py` → `local-data.js`, теж атомарно; фіди не відповіли —
+  лишаються попередні події). Тільки на NAS: на маку файлу з URL немає,
+  і синк тихо пропускається;
+- раз на добу — синк годинника книги (`date -u -s` + `hwclock -w`,
   RTC книги дрейфує роками);
 - працює **24/7** — нічного режиму немає (рішення 2026-08-27), годинник
-  тікає завжди.
+  тікає завжди;
+- **watchdog**: 5 збоїв рендера поспіль або година без книги → вихід із
+  кодом 1, щоб супервізор (`restart: always` / launchd `KeepAlive`) підняв
+  процес із чистим Chrome. Це лікує клас «завис Chrome», який зсередини
+  не розгребти.
 
-Демон живе в деплой-копії `~/kindle-dash-live/` — **навмисно поза git**:
-перемикання гілок/мерджі/чистки worktree не чіпають рантайм. Після зміни
-шаблону чи скриптів — перезапустити `./install-live.sh` (він копіює бандл
-і перезавантажує агента). Лог: `~/kindle-dash-live/live-push.log`.
+Рантайм навмисно **поза git** — на NAS це `/volume1/docker/kindle-dash/app`,
+на маку деплой-копія `~/kindle-dash-live/`: перемикання гілок, мерджі й
+чистки worktree не чіпають працюючий демон. Після зміни шаблону чи скриптів
+— перезапустити відповідний інсталятор.
 
 **Книга — тупий e-ink дисплей із фолбеком** (kindle-dash, `dash.sh`):
 
 - цикл `*/15 * * * *` цілодобово: `fetch-dashboard.sh` бере
   `/tmp/dash-live.png`, якщо він свіжіший за NAND-копію, інакше
-  `local/screen.png` — мак упав/мережа зникла → екран живе далі з
+  `local/screen.png` — конвеєр упав/мережа зникла → екран живе далі з
   останнім кадром;
 - `FULL_DISPLAY_REFRESH_RATE=96` — свій повний refresh лише раз на добу
   (основні робить мак);
@@ -64,9 +77,17 @@
   `art/today-plate.png`.
 - `night.html` — джерело sleeping.png-фолбека (чистий арт + орнамент);
   у живому циклі НЕ використовується (нічного режиму немає).
-- `render.sh` — headless Chrome (**--allow-file-access-from-files** —
-  інакше CSS-маска з file:// не рендериться) → ROTATE → grayscale.
-- `live-push.sh` + `install-live.sh` — живий конвеєр (вище).
+- `render.sh` — headless Chrome/Chromium (**--allow-file-access-from-files**
+  — інакше CSS-маска з file:// не рендериться) → ROTATE → grayscale.
+  Кросплатформний: на маку Google Chrome + `sips`, на Linux/NAS
+  `chromium` + ImageMagick (`-grayscale Rec709Luma` — голий
+  `-colorspace Gray` рахує по лінійному світлу й висвітлює півтони).
+- `live-push.sh` — живий конвеєр (вище), один на обидві платформи.
+- `ical-sync.py` — приватні iCal-фіди → `local-data.js`. URL-и лежать у
+  `secret/ical-urls` (0600, поза git) і **ніколи не друкуються в лог**.
+- `nas/` — Docker-обвʼязка для Synology: `install-nas.sh`, `Dockerfile`,
+  `docker-compose.yml`, `entrypoint.sh`, `healthcheck.sh` + `nas/README.md`.
+- `install-live.sh` — резервний launchd-шлях на маку.
 - `push-to-kindle.sh` — разова ручна заливка (діагностика).
 - `calibration.html` — калібрувальна карточка e-ink.
 
@@ -75,14 +96,13 @@
 ```
 ROTATE=0 ./render.sh out/preview.png        # подивитись макет (landscape)
 ./render.sh && ./push-to-kindle.sh          # разова заливка вручну
-./install-live.sh                           # перевстановити демона після правок
-launchctl bootout gui/$(id -u)/com.rudnik.kindle-dash   # зупинити демона
+
+nas/install-nas.sh                          # ШТАТНО: перевстановити на NAS
+ssh nas "sudo -n docker exec kindle-dash tail -f /app/live-push.log"
+
+./install-live.sh                           # РЕЗЕРВ: підняти конвеєр на маку
+launchctl bootout gui/$(id -u)/com.rudnik.kindle-dash   # зупинити мак-демона
 ```
 
-## Наступна фаза (дані)
-
-- `local-data.js` зараз — MCP-знапшот Google Calendar; автогенерація з
-  приватного iCal-URL (креденшели через 1Password) — фаза NAS.
-- Рендер-конвеєр цілком переїжджає на NAS (192.168.0.133) тим самим
-  механізмом: той же live-push.sh, той же ssh-ключ — мак перестає бути
-  точкою відмови.
+⚠️ Одночасно на NAS і на маку конвеєр не вмикати — два пушери битимуться
+за екран, e-ink блиматиме.
