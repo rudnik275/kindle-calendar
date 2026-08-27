@@ -1,3 +1,6 @@
 out/
 local-data.js
 local-weather.js
+nas/app/
+secret/
+__pycache__/

@@ -1,0 +1,48 @@
+# Живий конвеєр Kindle-дашборда на Synology.
+# Розгортання й оновлення: dashboard/nas/install-nas.sh (запускати з мака).
+#
+# Переживання ребуту NAS тримається на чотирьох речах:
+#   1) restart: always — демон Docker піднімає контейнер, щойно стартує сам
+#      (пакет Container Manager вантажиться при завантаженні DSM);
+#   2) весь стан — на /volume1 через бінд-маунт ./app (події, погода, лог,
+#      мітки часу, known_hosts). Перестворення контейнера нічого не втрачає;
+#   3) в образі вже все є — на старті не потрібні ні інтернет, ні реєстр:
+#      NAS піднімається швидше за роутер, і це нормально;
+#   4) внутрішній watchdog у live-push.sh виходить із кодом 1 на серії збоїв,
+#      а restart: always піднімає його з чистим Chrome.
+services:
+  kindle-dash:
+    build: .
+    image: kindle-dash:local
+    container_name: kindle-dash
+    restart: always
+    environment:
+      TZ: Europe/Kyiv
+      # KINDLE_HOST: 192.168.0.150   # розкоментуй, якщо книга переїхала
+    volumes:
+      - ./app:/app
+    tmpfs:
+      # кадри й тимчасовий профіль Chrome — у RAM: диски NAS не крутимо
+      # щохвилини заради PNG, який живе 60 секунд
+      - /tmp:size=192m
+      - /app/out:size=32m
+    # NAS має ~1.7 ГБ RAM на всіх (Jellyfin, Plex, боти). Ліміт не стільки
+    # рятує нас, скільки сусідів: якщо Chrome піде рознос, OOM-killer убʼє
+    # цей контейнер (і restart: always його підніме), а не Plex.
+    mem_limit: 640m
+    memswap_limit: 1g
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      # watchtower на цьому NAS оновлює лише позначені контейнери
+      # (WATCHTOWER_LABEL_ENABLE=true), але образ локальний — фіксуємо явно
+      com.centurylinklabs.watchtower.enable: "false"
