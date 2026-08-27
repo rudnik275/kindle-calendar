@@ -16,6 +16,8 @@
 #   - раз на добу синк годинника книги з сервером (RTC дрейфує роками);
 #   - погода Open-Meteo кожні 15 хв, атомарно у local-weather.js;
 #     без інтернету лишається останнє значення;
+#   - курс долара (обмінники Києва: minfin, фолбек monobank) 2 рази на
+#     добу, атомарно у local-rates.js — той самий контракт живучості;
 #   - події з приватних iCal кожні CAL_EVERY секунд (ical-sync.py), теж
 #     атомарно і теж із збереженням попереднього значення при збої;
 #   - серія збоїв рендера -> вихід із кодом 1: підняти нас заново має
@@ -34,6 +36,9 @@ NAND_EVERY=60          # хвилин між копіями на NAND
 # Погода: Київ (постав свої координати й перезапусти інсталятор)
 WEATHER_LAT="${WEATHER_LAT:-50.45}" WEATHER_LON="${WEATHER_LON:-30.52}"
 WEATHER_EVERY=900      # секунд
+RATES_EVERY=43200      # секунд: курс долара 2 рази на добу
+RATES_URL="https://minfin.com.ua/currency/kiev/"
+RATES_UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
 CAL_EVERY="${CAL_EVERY:-900}"        # секунд між синками календаря
 CAL_URLS="${CAL_URLS:-$DIR/secret/ical-urls}"  # приватні iCal-URL (0600, поза git)
 TIMESYNC_EVERY=86400   # секунд
@@ -80,6 +85,59 @@ print("window.DASH_WEATHER = { temp: %s, feels: %s };" % (c["temperature_2m"], c
   printf '%s\n' "$out" > "$DIR/local-weather.js.tmp" && mv "$DIR/local-weather.js.tmp" "$DIR/local-weather.js"
   echo "$now" > "$STATE/weather-ts"
   log "weather: $out"
+}
+
+fetch_rates() {
+  # Долар у обмінниках Києва -> local-rates.js (атомарно; без інтернету
+  # лишається останнє значення). Джерело — JSON-LD (schema.org) зі сторінки
+  # minfin «курс у Києві»: «Средний наличный курс» = середнє по обмінниках.
+  # Розмітка для пошуковиків, тому стабільніша за HTML-верстку. Фолбек —
+  # API monobank (безкоштовне, без ключа; курс близький до готівкового).
+  local now last; now=$(date +%s); last=$(cat "$STATE/rates-ts" 2>/dev/null || echo 0)
+  [ $((now - last)) -lt "$RATES_EVERY" ] && return 0
+  local out
+  out=$(curl -sf -m 15 -A "$RATES_UA" "$RATES_URL" 2>/dev/null | python3 -c '
+import sys, re, json
+html = sys.stdin.read()
+for m in re.finditer(r"<script[^>]*application/ld\+json[^>]*>(.*?)</script>", html, re.S):
+    try: data = json.loads(m.group(1))
+    except ValueError: continue
+    stack = [data]; buy = sell = None
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if (node.get("@type") == "ExchangeRateSpecification"
+                    and node.get("currency") == "USD"
+                    and "наличн" in node.get("name", "")):
+                price = float(node["currentExchangeRate"]["price"])
+                if "покупки" in node.get("description", ""): buy = price
+                elif "продажи" in node.get("description", ""): sell = price
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    if buy and sell:
+        print("window.DASH_RATES = { usd: { buy: %.2f, sell: %.2f }, source: \"minfin/kyiv\" };" % (buy, sell))
+        sys.exit(0)
+sys.exit(1)
+' 2>/dev/null)
+  if [ -z "$out" ]; then
+    out=$(curl -sf -m 10 "https://api.monobank.ua/bank/currency" 2>/dev/null | python3 -c '
+import sys, json
+for r in json.load(sys.stdin):
+    if r.get("currencyCodeA") == 840 and r.get("currencyCodeB") == 980:
+        print("window.DASH_RATES = { usd: { buy: %.2f, sell: %.2f }, source: \"monobank\" };" % (r["rateBuy"], r["rateSell"]))
+        break
+' 2>/dev/null)
+  fi
+  if [ -z "$out" ]; then
+    # обидва джерела мовчать — повторити за 30 хв, не молотити щохвилини
+    log "rates: fetch failed (minfin+mono)"
+    echo $((now - RATES_EVERY + 1800)) > "$STATE/rates-ts"
+    return 1
+  fi
+  printf '%s\n' "$out" > "$DIR/local-rates.js.tmp" && mv "$DIR/local-rates.js.tmp" "$DIR/local-rates.js"
+  echo "$now" > "$STATE/rates-ts"
+  log "rates: $out"
 }
 
 sync_calendar() {
@@ -133,6 +191,7 @@ while true; do
   min=$((10#$(date +%M)))
 
   fetch_weather
+  fetch_rates
   sync_calendar
   sync_kindle_clock
 
