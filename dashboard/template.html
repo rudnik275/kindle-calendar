@@ -65,7 +65,6 @@ body { font-family:'PT Serif',serif; position:relative; }
 .evr .what { display:block; margin-left:124px; padding:14px 0 8px; }
 .evr .name { font-size:16px; font-weight:700; line-height:1.2; }
 .evr .sub { font-size:13px; color:#403b34; margin-top:2px; }
-.evr.muted .name { font-weight:400; font-style:italic; color:#4a453d; font-size:15.5px; }
 
 /* ── тиждень ── */
 .week { position:absolute; left:0; top:482px; width:800px; height:112px; }
@@ -148,19 +147,16 @@ body { font-family:'PT Serif',serif; position:relative; }
 
   // події — макс 4 рядки
   const evs = ((window.DASH_DATA && window.DASH_DATA.events) || []).slice(0, 4);
-  const todayStr = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
   let html = '';
-  const row = (abbr, big, name, sub, muted) =>
-    '<div class="evr' + (muted ? ' muted' : '') + '"><span class="wd">' + abbr + '</span>' +
+  const row = (abbr, big, name, sub) =>
+    '<div class="evr"><span class="wd">' + abbr + '</span>' +
     '<span class="big">' + big + '</span><span class="orn">' + DIA('#33302b') + '</span>' +
     '<span class="what"><div class="name">' + name + '</div>' +
     (sub ? '<div class="sub">' + sub + '</div>' : '') + '</span></div>';
+  // Порожній день лишається порожнім: рядка-заглушки «сьогодні подій немає»
+  // немає навмисно (рішення 2026-08-28) — на e-ink порожнеча читається як
+  // «вільно» краще за напис, і не займає один із чотирьох слотів.
   // маска зносу — тільки на цифрах: 20px-абревіатури місяців вона розриває
-  if (!evs.some(e => e.start.slice(0,10) === todayStr)) {
-    html += row(ABBR_SUN[now.getDay()],
-      '<span class="worn">' + now.getDate() + '</span> <span class="sm">' + MONTHS_AB[now.getMonth()] + '</span>',
-      'сьогодні подій немає', '', true);
-  }
   for (const e of evs) {
     const d = new Date(e.start.slice(0,10) + 'T00:00');
     const big = e.allDay
