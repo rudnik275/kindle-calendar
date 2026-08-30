@@ -22,7 +22,9 @@
 #     атомарно і теж із збереженням попереднього значення при збої;
 #   - серія збоїв рендера -> вихід із кодом 1: підняти нас заново має
 #     супервізор (docker restart: always / launchd KeepAlive). Це лікує
-#     клас «завис Chrome», який зсередини не розгребти.
+#     клас «завис Chrome», який зсередини не розгребти;
+#   - окремо від лічильників збоїв — сторож за heartbeat: ловить ступор
+#     (команда, що не повертається), якого лічильники не бачать.
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
@@ -44,6 +46,7 @@ CAL_URLS="${CAL_URLS:-$DIR/secret/ical-urls}"  # приватні iCal-URL (0600
 TIMESYNC_EVERY=86400   # секунд
 RENDER_FAILS_MAX=5     # поспіль -> вихід, хай супервізор перезапустить
 PUSH_FAILS_MAX=60      # поспіль (≈1 год) -> те саме: чистимо мережевий стан
+HEARTBEAT_STALL="${HEARTBEAT_STALL:-420}"  # секунд без відмітки -> цикл завис
 
 LOG="$DIR/live-push.log"
 STATE="$DIR/state"; mkdir -p "$STATE" out
@@ -184,6 +187,56 @@ render() {  # $1=template  $2=out
 }
 
 log "=== live-push daemon started (pid $$) ==="
+
+# ── Сторож проти ЗАВИСАННЯ ────────────────────────────────────────────────
+# Лічильники нижче ловлять ПАДІННЯ (рендер повернув помилку). Мовчазний
+# ступор вони не бачать: цикл просто стоїть на команді, що не повертається,
+# лічильник не росте, і екран книги лишається з давнім кадром, поки не
+# спрацює запобіжник «година без книги». Саме так 2026-08-30 екран простояв
+# 1.5 години на 16:32, коли скани медіатек загнали NAS у своп.
+#
+# Вбити PID 1 зсередини контейнера сигналом не можна: ядро не доставляє
+# SIGKILL/SIGTERM ініту namespace'у, поки нема обробника. Тому порядок такий:
+# спершу відстрілюємо зависле піддерево (це звільняє цикл із блокуючої
+# команди), далі шлемо USR1 — його обробник і робить штатний exit 1.
+MAIN_PID=$$
+trap 'log "watchdog: примусовий вихід — цикл завис"; exit 1' USR1
+
+children_of() {  # $1=ppid. procps в образі може не бути — тоді читаємо /proc
+  local p ppid
+  if command -v pgrep >/dev/null 2>&1; then pgrep -P "$1" 2>/dev/null; return 0; fi
+  for p in /proc/[0-9]*; do
+    [ -r "$p/stat" ] || continue
+    # comm у дужках і з пробілами — тому відрізаємо все до останньої ')'
+    ppid=$(sed 's/.*) //' "$p/stat" 2>/dev/null | awk '{print $2}')
+    [ "$ppid" = "$1" ] && echo "${p#/proc/}"
+  done
+  return 0
+}
+
+date +%s > "$STATE/heartbeat"   # інакше сторож візьме старий файл за ступор
+(
+  me=$BASHPID
+  kill_tree() {   # знизу вгору, щоб chromium не осиротів і не пережив render.sh
+    local c
+    for c in $(children_of "$1"); do
+      [ "$c" = "$me" ] && continue
+      kill_tree "$c"
+    done
+    [ "$1" = "$MAIN_PID" ] || kill -9 "$1" 2>/dev/null
+  }
+  while sleep 60; do
+    kill -0 "$MAIN_PID" 2>/dev/null || exit 0        # головний помер — і ми теж
+    age=$(( $(date +%s) - $(cat "$STATE/heartbeat" 2>/dev/null || echo 0) ))
+    [ "$age" -le "$HEARTBEAT_STALL" ] && continue
+    log "watchdog: heartbeat протух ${age}s (>${HEARTBEAT_STALL}s) — знімаємо завислих"
+    kill_tree "$MAIN_PID"
+    sleep 5
+    kill -USR1 "$MAIN_PID" 2>/dev/null
+    exit 0
+  done
+) &
+
 render_fails=0 push_fails=0 first=yes
 
 while true; do

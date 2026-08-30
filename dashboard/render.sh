@@ -18,7 +18,17 @@ TEMPLATE="${TEMPLATE:-$DIR/template.html}"
 case "$TEMPLATE" in /*) ;; *) TEMPLATE="$(cd "$(dirname "$TEMPLATE")" && pwd)/$(basename "$TEMPLATE")" ;; esac
 
 mkdir -p "$(dirname "$OUT")"
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"
+# Убитий за таймаутом Chrome лишає по собі дітей (zygote/renderer/gpu): вони
+# висять до кінця життя контейнера і їдять ту саму память, через яку рендер і
+# не вклався. Мітка для відстрілу — власний user-data-dir, він унікальний.
+cleanup() {
+  if command -v pkill >/dev/null 2>&1; then
+    pkill -9 -f "user-data-dir=$TMP/chrome" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
 
 find_chrome() {
   [ -n "${CHROME_BIN:-}" ] && { echo "$CHROME_BIN"; return; }
@@ -43,8 +53,32 @@ if [ "$(uname -s)" = Linux ]; then
           --user-data-dir="$TMP/chrome")
 fi
 
-"$CHROME" "${FLAGS[@]}" --screenshot="$TMP/shot.png" "file://$TEMPLATE" 2>/dev/null
-[ -s "$TMP/shot.png" ] || { echo "render.sh: Chrome не віддав скріншот" >&2; exit 1; }
+# Таймаут — не косметика, а головний запобіжник конвеєра. Коли NAS іде у своп
+# (скани медіатек Plex/Jellyfin на 1.7 ГБ RAM), рендер росте з секунд до 4-6
+# хвилин. Без таймауту live-push.sh чекає синхронно й стоїть годинами, а його
+# лічильник збоїв не росте — бо збою нема, є ступор. З таймаутом ступор стає
+# звичайним збоєм, який watchdog уміє лікувати. (Діагноз 2026-08-30.)
+RENDER_TIMEOUT="${RENDER_TIMEOUT:-90}"
+TIMEOUT_BIN=""
+for t in timeout gtimeout; do   # на маку coreutils-timeout зветься gtimeout
+  command -v "$t" >/dev/null 2>&1 && { TIMEOUT_BIN="$t"; break; }
+done
+
+rc=0
+if [ -n "$TIMEOUT_BIN" ]; then
+  # -k 10: не відповів на TERM за 10 с — добиваємо KILL
+  "$TIMEOUT_BIN" -k 10 "$RENDER_TIMEOUT" \
+    "$CHROME" "${FLAGS[@]}" --screenshot="$TMP/shot.png" "file://$TEMPLATE" 2>/dev/null || rc=$?
+else
+  "$CHROME" "${FLAGS[@]}" --screenshot="$TMP/shot.png" "file://$TEMPLATE" 2>/dev/null || rc=$?
+fi
+if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then
+  echo "render.sh: Chrome не вклався у ${RENDER_TIMEOUT}s — убитий (сервер у свопі?)" >&2
+  exit 1
+fi
+# Код виходу Chrome навмисно не перевіряємо окремо: він буває ненульовим і на
+# вдалому знімку. Джерело правди — сам файл.
+[ -s "$TMP/shot.png" ] || { echo "render.sh: Chrome не віддав скріншот (код $rc)" >&2; exit 1; }
 
 if [ "$(uname -s)" = Darwin ]; then
   sips -r "$ROT" "$TMP/shot.png" >/dev/null
