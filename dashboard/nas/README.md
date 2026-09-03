@@ -181,7 +181,7 @@ ssh nas "sudo -n docker exec kindle-dash tail -f /app/live-push.log"
 # стан і здоровʼя
 ssh nas "sudo -n docker ps --filter name=kindle-dash --format '{{.Status}}'"
 
-# памʼять (на NAS її ~1.7 ГБ на всіх, ліміт контейнера 640 МБ)
+# памʼять (NAS має 10 ГБ від 2026-09-03; лімітів у контейнера немає)
 ssh nas "sudo -n docker stats --no-stream kindle-dash"
 
 # разовий рендер без пуша (подивитись, що вийшло)
