@@ -54,7 +54,10 @@ body { font-family:'PT Serif',serif; position:relative; }
   white-space:nowrap; }
 
 /* ── події ── */
-.events { position:absolute; left:308px; top:178px; width:280px; }
+/* Висота — рівно 4 порожні слоти (4×72 + 3 лінії): до плашки тижня (top 466)
+   лишається 3px, як у макеті. overflow:hidden — страховка, щоб рядок ніколи
+   не ліг на стрічку тижня; що саме сюди вміщати, вирішує fit() у скрипті. */
+.events { position:absolute; left:308px; top:178px; width:280px; height:291px; overflow:hidden; }
 .evr { position:relative; min-height:72px; }
 .evr + .evr { border-top:1px solid #6b655c; }
 .evr .wd { position:absolute; left:0; top:9px; font-family:'Forum',serif; font-size:13.5px; letter-spacing:.22em; }
@@ -68,6 +71,10 @@ body { font-family:'PT Serif',serif; position:relative; }
    тримають кегль і колір, а не вага. */
 .evr .name { font-size:17px; font-weight:400; line-height:1.2; }
 .evr .sub { font-size:13px; color:#403b34; margin-top:2px; }
+/* Ступені ущільнення, які вмикає fit(), коли рядки не влазять у 4 слоти:
+   .tight — назва не довша за 2 рядки (хвіст → «…»); .nosub — без локації. */
+.events.tight .name { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.events.nosub .sub { display:none; }
 
 /* ── тиждень ── */
 .week { position:absolute; left:0; top:482px; width:800px; height:112px; }
@@ -148,9 +155,13 @@ body { font-family:'PT Serif',serif; position:relative; }
       DIA('#33302b');
   }
 
-  // події — макс 4 рядки
+  // події — до 4 слотів по 72px (висота .events = рівно 4 слоти). Рядок
+  // росте, коли назва переноситься на 3 рядки або є локація, — і 4 таких
+  // рядки лягали на стрічку тижня (фото 2026-09-04). fit() підбирає, що
+  // показати: спершу максимум подій, потім мінімум ущільнення — повні назви
+  // → назви до 2 рядків → без локацій → на одну подію менше.
   const evs = ((window.DASH_DATA && window.DASH_DATA.events) || []).slice(0, 4);
-  let html = '';
+  const rows = [];
   const row = (abbr, big, name, sub) =>
     '<div class="evr"><span class="wd">' + abbr + '</span>' +
     '<span class="big">' + big + '</span><span class="orn">' + DIA('#33302b') + '</span>' +
@@ -165,9 +176,23 @@ body { font-family:'PT Serif',serif; position:relative; }
     const big = e.allDay
       ? '<span class="worn">' + d.getDate() + '</span> <span class="sm">' + MONTHS_AB[d.getMonth()] + '</span>'
       : '<span class="worn">' + e.start.slice(11,16) + '</span>';
-    html += row(ABBR_SUN[d.getDay()], big, esc(e.title), e.sub ? esc(e.sub) : '');
+    rows.push(row(ABBR_SUN[d.getDay()], big, esc(e.title), e.sub ? esc(e.sub) : ''));
   }
-  document.getElementById('events').innerHTML = html;
+  const evEl = document.getElementById('events');
+  const LEVELS = ['', 'tight', 'tight nosub'];
+  function fit() {
+    for (let n = rows.length; n >= 1; n--) {
+      for (const lvl of LEVELS) {
+        evEl.className = 'events ink ' + lvl;
+        evEl.innerHTML = rows.slice(0, n).join('');
+        if (evEl.scrollHeight <= evEl.clientHeight) return;
+      }
+    }
+  }
+  // Поки шрифти не завантажились, макет рахується по запасному шрифту й
+  // переноси інші, тому fit() біжить одразу і ще раз по document.fonts.ready.
+  fit();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
 
   // тиждень пн–нд: стрічка ліворуч від портрета
   const CX = [108, 195, 282, 369, 456, 543, 630];
