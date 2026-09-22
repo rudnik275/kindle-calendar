@@ -2,8 +2,10 @@
 # Рендер шаблона в PNG під Kindle 4: headless Chrome 800x600 ->
 # поворот у портрет 600x800 -> grayscale.
 # Використання: ./render.sh [out.png]
-# ROTATE=90|270 — якою стороною книга стоїть на столі (дефолт 90;
-# якщо картинка догори ногами — постав 270).
+# ROTATE=90|270 — якою стороною книга стоїть на столі (дефолт 270;
+# якщо картинка догори ногами — постав 90). Дефолт змінено з 90 на 270
+# 2026-09-22: надрукований корпус тримає книгу протилежним боком догори,
+# ніж голий пристрій на столі, під який калібрували спершу.
 # TEMPLATE=шлях.html — рендерити інший шаблон (дефолт template.html).
 #
 # Кросплатформний: macOS (Google Chrome + sips) і Linux/Docker
@@ -12,7 +14,7 @@
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 OUT="${1:-$DIR/out/dash.png}"
-ROT="${ROTATE:-90}"
+ROT="${ROTATE:-270}"
 TEMPLATE="${TEMPLATE:-$DIR/template.html}"
 # відносний шлях (TEMPLATE=./night.html) → абсолютний, інакше file:// не відкриється
 case "$TEMPLATE" in /*) ;; *) TEMPLATE="$(cd "$(dirname "$TEMPLATE")" && pwd)/$(basename "$TEMPLATE")" ;; esac
