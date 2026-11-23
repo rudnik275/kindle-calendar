@@ -126,7 +126,7 @@ with schemdraw.Drawing(file="schematic.svg", show=False) as d:
     hx0, hx1, hy0, hy1 = xs[0] - 1.6, xs[-1] + 2.4, lamp_y - 0.8, TOP - 3.6
     for a, b in (((hx0, hy0), (hx1, hy0)), ((hx1, hy0), (hx1, hy1)), ((hx1, hy1), (hx0, hy1)), ((hx0, hy1), (hx0, hy0))):
         d += elm.Line().at(a).to(b).linestyle("--")
-    note(d, (hx1, hy0 - 0.4), "козырёк: к плате — J3, JST-XH 4 жилы\n(3 нити после резисторов + LAMP−)",
+    note(d, (hx1, hy0 - 0.4), "козырёк: к плате 4 провода\n(3 нити после резисторов + LAMP−)",
          halign="right", valign="top")
 
     # ---- Шины ----
