@@ -7,7 +7,8 @@
 // Ручка — як звичайний димер: 0 — темно, далі 48 кроків до 100 %. Крок — сталий
 // множник яскравості (око бачить відношення); унизу, де 10-бітного ШИМ на це
 // не вистачає, — +1 такт на крок. Клік — вимкнути / увімкнути на останньому
-// рівні, плавно. Рівень — в EEPROM через 5 с після останньої зміни.
+// рівні, плавно. Після ввімкнення живлення — завжди темно; останній рівень
+// (для кліку) — в EEPROM через 5 с після останньої зміни.
 // Serial 115200 друкує рівень — на стенді видно, що енкодер читається.
 
 #include <Arduino.h>
@@ -26,7 +27,7 @@ const uint16_t MIN_DUTY = 3;
 const uint16_t FADE_MS = 400;
 const uint32_t SAVE_DELAY_MS = 5000;
 
-const int EE_MAGIC = 0, EE_LEVEL = 1, EE_LAST_ON = 2;
+const int EE_MAGIC = 0, EE_LAST_ON = 2;  // адреса 1 (рівень) більше не пишемо
 const uint8_t MAGIC = 0x5C;
 
 uint16_t table[STEPS + 1];   // крок → такти «світло»
@@ -159,14 +160,12 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(PIN_DT), encIsr, CHANGE);
 
   Serial.begin(115200);
+  // Після ввімкнення живлення завжди темно (рівень 0): світло — енкодером
+  // (з мінімуму) або кліком (останній рівень, він пережив вимкнення).
   if (EEPROM.read(EE_MAGIC) == MAGIC) {
-    level = min(EEPROM.read(EE_LEVEL), STEPS);
     lastOn = constrain(EEPROM.read(EE_LAST_ON), 1, STEPS);
-  } else {
-    level = lastOn;
   }
   Serial.println(F("backlight: ready"));
-  fadeTo(table[level]);
   report();
 }
 
@@ -190,7 +189,6 @@ void loop() {
 
   if (dirty && millis() - changedAt > SAVE_DELAY_MS) {
     EEPROM.update(EE_MAGIC, MAGIC);
-    EEPROM.update(EE_LEVEL, level);
     EEPROM.update(EE_LAST_ON, lastOn);
     dirty = false;
     Serial.println(F("saved"));
