@@ -115,7 +115,7 @@ with schemdraw.Drawing(file="schematic.svg", show=False) as d:
             d += elm.Dot().at((lx, lamp_y))
             d += elm.Dot().at((lx, gnd_y))
         d += elm.Resistor().at((lx, lamp_y)).down().length(2.8).label(
-            f"R{i + 3}\n6,8 Ом\n2 Вт", loc="bottom", ofst=0.15)
+            f"R{i + 3}\n8,2 Ом\n2 Вт", loc="bottom", ofst=0.15)
         d += elm.Line().down().length(0.8)
         d += elm.LED().down().length(2.2).label(f"LED{i + 1}", loc="bottom", ofst=0.15)
         d += elm.Line().toy(gnd_y)
