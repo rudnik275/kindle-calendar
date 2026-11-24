@@ -92,7 +92,7 @@ with schemdraw.Drawing(file="schematic.svg", show=False) as d:
     d += elm.Line().at((qx, TOP)).toy(src_y)
     q1 = elm.PFet().right().reverse().anchor("source").at((qx, src_y))
     d += q1
-    note(d, (qx + 0.5, q1.gate[1]), "Q1\nAO3401\n(P-канал)")
+    note(d, (qx + 0.5, q1.gate[1]), "Q1 AO3401 (P-канал)\nSOT-23: 1 — затвор, 2 — исток,\n3 (одиночная) — сток")
     gate_y = q1.gate[1]
     d += elm.Line().at(u1.D9).tox(rx)
     d += elm.Line().at((rx, u1.D9[1])).toy(gate_y)
@@ -138,5 +138,5 @@ with schemdraw.Drawing(file="schematic.svg", show=False) as d:
     d += elm.Label().at((0, TOP + 0.6)).label("+5 В", halign="left")
     d += elm.Label().at((0, BOT - 0.8)).label("GND", halign="left")
 
-    note(d, (LAST_X + 2.5, BOT - 1.0), "COB-нити 2700K, 3 В, 0,3 А — каждая со своим резистором",
+    note(d, (LAST_X + 2.5, BOT - 1.0), "COB-нити DS006, 2700K, 3 В, ток < 300 мА — каждая со своим резистором",
          halign="right")
