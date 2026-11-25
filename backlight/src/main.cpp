@@ -6,8 +6,9 @@
 //
 // Ручка — як звичайний димер: 0 — темно, далі 10 кроків (пів оберту) до 100 %. Крок — сталий
 // множник яскравості (око бачить відношення); унизу, де 10-бітного ШИМ на це
-// не вистачає, — +1 такт на крок. Клік — вимкнути / увімкнути на останньому
-// рівні, плавно. Після ввімкнення живлення — завжди темно; останній рівень
+// не вистачає, — +1 такт на крок. Між кроками світло перетікає плавно (ease-out,
+// ~0,2 с), не ступенями. Клік — вимкнути / увімкнути на останньому
+// рівні, плавно (~0,4 с). Після ввімкнення живлення — завжди темно; останній рівень
 // (для кліку) — в EEPROM через 5 с після останньої зміни.
 // Serial 115200 друкує рівень — на стенді видно, що енкодер читається.
 
@@ -24,7 +25,9 @@ const int8_t DIRECTION = -1;   // з цим енкодером за годинн
 // Тактів на першому кроці. Коротше затвор через 220 Ом не встигає відкритись.
 // Підібрати на стенді: перший крок має ледь жевріти.
 const uint16_t MIN_DUTY = 3;
-const uint16_t FADE_MS = 400;
+// Плавність: світло «доганяє» ціль з постійною часу τ (95 % шляху за 3τ).
+const uint16_t TAU_TURN_MS = 70;    // поворот — ~0,2 с на крок, швидке кручення не відстає
+const uint16_t TAU_CLICK_MS = 140;  // клік — повільніше, ~0,4 с
 const uint32_t SAVE_DELAY_MS = 5000;
 
 const int EE_MAGIC = 0, EE_LAST_ON = 2;  // адреса 1 (рівень) більше не пишемо
@@ -102,16 +105,39 @@ void buildTable() {
   table[STEPS] = PERIOD;
 }
 
-// Плавно в логарифмі — тим самим «сталим множником», що й кроки.
-void fadeTo(uint16_t target) {
-  if (target == duty) return;
-  const uint8_t frames = FADE_MS / 10;
-  float a = log(float(max(duty, MIN_DUTY))), b = log(float(max(target, MIN_DUTY)));
-  for (uint8_t k = 1; k < frames; k++) {
-    setDuty((uint16_t)(exp(a + (b - a) * k / frames) + 0.5));
-    delay(10);
+// ---- плавність (як transition: ease-out у CSS) ----
+// Яскравість рухається до цілі в логарифмі (око бачить відношення): кожні ~3 мс
+// проходить частку 1 − e^(−dt/τ) шляху, що лишився. Не блокує loop — новий
+// поворот просто міняє ціль, і світло без ривка повертає до неї.
+float curLog = -1;  // ln(поточних тактів); < 0 — темно
+float tgtLog = -1;  // ln(цілі); < 0 — темно
+uint16_t tauMs = TAU_TURN_MS;
+uint32_t animAt = 0;
+
+void aimAt(uint16_t target, uint16_t tau) {
+  tgtLog = target ? log(float(target)) : -1;
+  tauMs = tau;
+}
+
+void animate() {
+  uint32_t now = millis();
+  uint32_t dt = now - animAt;
+  if (dt < 3) return;
+  animAt = now;
+  if (curLog < 0 && tgtLog < 0) return;  // темно й лишаємось
+  const float lo = log(float(MIN_DUTY));
+  float from = curLog < 0 ? lo : curLog;  // з темряви — від мінімуму
+  float to = tgtLog < 0 ? lo : tgtLog;    // у темряву — до мінімуму, потім 0
+  float next = from + (to - from) * (1 - exp(-float(dt) / tauMs));
+  if (fabs(to - next) < 0.01) next = to;
+  if (tgtLog < 0 && next <= lo) {  // догасли
+    curLog = -1;
+    setDuty(0);
+    return;
   }
-  setDuty(target);
+  curLog = next;
+  uint16_t d = (uint16_t)(exp(curLog) + 0.5);
+  if (d != duty) setDuty(d);
 }
 
 // ---- кнопка ----
@@ -135,8 +161,8 @@ void report() {
   Serial.print(level);
   Serial.print('/');
   Serial.print(STEPS);
-  Serial.print(F("  duty "));
-  Serial.print(duty);
+  Serial.print(F("  target "));
+  Serial.print(table[level]);
   Serial.print('/');
   Serial.println(PERIOD);
 }
@@ -176,16 +202,18 @@ void loop() {
     if (next != level) {
       level = next;
       if (level > 0) lastOn = level;
-      setDuty(table[level]);
+      aimAt(table[level], TAU_TURN_MS);
       touch();
     }
   }
 
   if (clicked()) {
     level = level > 0 ? 0 : lastOn;
-    fadeTo(table[level]);
+    aimAt(table[level], TAU_CLICK_MS);
     touch();
   }
+
+  animate();
 
   if (dirty && millis() - changedAt > SAVE_DELAY_MS) {
     EEPROM.update(EE_MAGIC, MAGIC);
