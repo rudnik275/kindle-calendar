@@ -4,16 +4,14 @@
 // D9 → 220 Ом → затвор AO3401; 10 кОм затвор → +5V тримає світло вимкненим,
 // поки Nano вантажиться чи прошивається. LOW на затворі — світло, HIGH — темно.
 //
-// Ручка — як звичайний димер: 0 — темно, далі 10 кроків (пів оберту) до 100 %. Крок — сталий
-// множник яскравості (око бачить відношення); унизу, де 10-бітного ШИМ на це
-// не вистачає, — +1 такт на крок. Між кроками світло перетікає плавно (ease-out,
-// ~0,2 с), не ступенями. Клік — вимкнути / увімкнути на останньому
-// рівні, плавно (~0,4 с). Після ввімкнення живлення — завжди темно; останній рівень
-// (для кліку) — в EEPROM через 5 с після останньої зміни.
-// Serial 115200 друкує рівень — на стенді видно, що енкодер читається.
+// Ручка — як звичайний димер: 0 — темно, далі 10 кроків (пів оберту) до 100 %.
+// Крок — сталий множник яскравості (око бачить відношення). Між кроками світло
+// перетікає плавно (ease-out, ~0,2 с), не ступенями.
+// Клік: темно → 100 %, світить → темно (плавно, ~0,4 с). Нічого не запамʼятовує:
+// після ввімкнення живлення завжди темно.
+// Serial 115200 друкує рівень — видно, що енкодер читається.
 
 #include <Arduino.h>
-#include <EEPROM.h>
 
 const uint8_t PIN_CLK = 2, PIN_DT = 3, PIN_SW = 4, PIN_PWM = 9;
 
@@ -28,17 +26,10 @@ const uint16_t MIN_DUTY = 3;
 // Плавність: світло «доганяє» ціль з постійною часу τ (95 % шляху за 3τ).
 const uint16_t TAU_TURN_MS = 70;    // поворот — ~0,2 с на крок, швидке кручення не відстає
 const uint16_t TAU_CLICK_MS = 140;  // клік — повільніше, ~0,4 с
-const uint32_t SAVE_DELAY_MS = 5000;
 
-const int EE_MAGIC = 0, EE_LAST_ON = 2;  // адреса 1 (рівень) більше не пишемо
-const uint8_t MAGIC = 0x5C;
-
-uint16_t table[STEPS + 1];   // крок → такти «світло»
-uint8_t level = 0;           // 0 — темно, 1..STEPS — світло
-uint8_t lastOn = STEPS / 2;  // куди повертає клік
+uint16_t table[STEPS + 1];  // крок → такти «світло»
+uint8_t level = 0;          // 0 — темно, 1..STEPS — світло
 uint16_t duty = 0;
-bool dirty = false;
-uint32_t changedAt = 0;
 
 // ---- енкодер ----
 // Квадратурний декодер на перериваннях: таблиця пропускає неможливі переходи
@@ -109,13 +100,16 @@ void buildTable() {
 // Яскравість рухається до цілі в логарифмі (око бачить відношення): кожні ~3 мс
 // проходить частку 1 − e^(−dt/τ) шляху, що лишився. Не блокує loop — новий
 // поворот просто міняє ціль, і світло без ривка повертає до неї.
-float curLog = -1;  // ln(поточних тактів); < 0 — темно
-float tgtLog = -1;  // ln(цілі); < 0 — темно
+// «Темно» — це ціль НИЖЧЕ одного такту (ln 0,3): світло проходить низ на повному
+// ходу й гасне, щойно стає менше 1 такту, — без гальмування й стрибка на дні.
+// Із темряви так само стартує з нуля, а не одразу з мінімального кроку.
+const float LOG_DARK = -1.2;  // ≈ ln(0,3 такту)
+float curLog = LOG_DARK, tgtLog = LOG_DARK;
 uint16_t tauMs = TAU_TURN_MS;
 uint32_t animAt = 0;
 
 void aimAt(uint16_t target, uint16_t tau) {
-  tgtLog = target ? log(float(target)) : -1;
+  tgtLog = target ? log(float(target)) : LOG_DARK;
   tauMs = tau;
 }
 
@@ -124,19 +118,12 @@ void animate() {
   uint32_t dt = now - animAt;
   if (dt < 3) return;
   animAt = now;
-  if (curLog < 0 && tgtLog < 0) return;  // темно й лишаємось
-  const float lo = log(float(MIN_DUTY));
-  float from = curLog < 0 ? lo : curLog;  // з темряви — від мінімуму
-  float to = tgtLog < 0 ? lo : tgtLog;    // у темряву — до мінімуму, потім 0
-  float next = from + (to - from) * (1 - exp(-float(dt) / tauMs));
-  if (fabs(to - next) < 0.01) next = to;
-  if (tgtLog < 0 && next <= lo) {  // догасли
-    curLog = -1;
-    setDuty(0);
-    return;
-  }
+  if (curLog == tgtLog) return;
+  float next = curLog + (tgtLog - curLog) * (1 - exp(-float(dt) / tauMs));
+  if (fabs(tgtLog - next) < 0.01) next = tgtLog;
   curLog = next;
-  uint16_t d = (uint16_t)(exp(curLog) + 0.5);
+  uint16_t d = curLog < 0 ? 0 : (uint16_t)(exp(curLog) + 0.5);  // < 1 такту — темно
+  if (d > PERIOD) d = PERIOD;
   if (d != duty) setDuty(d);
 }
 
@@ -167,12 +154,6 @@ void report() {
   Serial.println(PERIOD);
 }
 
-void touch() {
-  dirty = true;
-  changedAt = millis();
-  report();
-}
-
 void setup() {
   pwmInit();
   setDuty(0);
@@ -186,11 +167,6 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(PIN_DT), encIsr, CHANGE);
 
   Serial.begin(115200);
-  // Після ввімкнення живлення завжди темно (рівень 0): світло — енкодером
-  // (з мінімуму) або кліком (останній рівень, він пережив вимкнення).
-  if (EEPROM.read(EE_MAGIC) == MAGIC) {
-    lastOn = constrain(EEPROM.read(EE_LAST_ON), 1, STEPS);
-  }
   Serial.println(F("backlight: ready"));
   report();
 }
@@ -201,24 +177,16 @@ void loop() {
     uint8_t next = constrain((int)level + d, 0, (int)STEPS);
     if (next != level) {
       level = next;
-      if (level > 0) lastOn = level;
       aimAt(table[level], TAU_TURN_MS);
-      touch();
+      report();
     }
   }
 
   if (clicked()) {
-    level = level > 0 ? 0 : lastOn;
+    level = level > 0 ? 0 : STEPS;  // темно → 100 %, світить → темно
     aimAt(table[level], TAU_CLICK_MS);
-    touch();
+    report();
   }
 
   animate();
-
-  if (dirty && millis() - changedAt > SAVE_DELAY_MS) {
-    EEPROM.update(EE_MAGIC, MAGIC);
-    EEPROM.update(EE_LAST_ON, lastOn);
-    dirty = false;
-    Serial.println(F("saved"));
-  }
 }
